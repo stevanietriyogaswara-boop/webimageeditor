@@ -1,566 +1,1036 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Creato - Editor Gambar & Video Online</title>
-<!-- Tailwind CSS untuk Desain -->
-<script src="https://cdn.tailwindcss.com"></script>
-<!-- Lucide Icons -->
-<script src="https://unpkg.com/lucide@latest"></script>
-<!-- Imgly Background Removal (AI Client-Side) via esm.sh -->
-<script type="module">
-import imglyRemoveBackground from 'https://esm.sh/@imgly/background-removal@1.4.5';
-window.imglyRemoveBackground = imglyRemoveBackground;
-</script>
-<!-- Firebase SDK (Untuk Google Login) -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creato - Editor Gambar Evan Style</title>
+    <!-- Tailwind CSS untuk Desain -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Imgly Background Removal (AI Client-Side) via esm.sh -->
+    <script type="module">
+        import imglyRemoveBackground from 'https://esm.sh/@imgly/background-removal@1.4.5';
+        window.imglyRemoveBackground = imglyRemoveBackground;
+    </script>
+    <!-- Firebase SDK (Untuk Google Login) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
-// PERHATIAN: Ganti konfigurasi ini dengan milik Anda dari Firebase Console nanti
-const firebaseConfig = {
-apiKey: "MOCK_API_KEY",
-authDomain: "creato-app.firebaseapp.com",
-projectId: "creato-app",
-};
+        const firebaseConfig = { apiKey: "MOCK_API_KEY", authDomain: "creato-app.firebaseapp.com", projectId: "creato-app" };
+        let auth;
+        try {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+        } catch(e) { console.log("Firebase lokal."); }
 
-// Inisialisasi Firebase (Akan error jika MOCK_API_KEY tidak diganti, tapi UI mock login sudah disiapkan di bawah)
-let auth;
-try {
-const app = initializeApp(firebaseConfig);
-auth = getAuth(app);
-} catch(e) {
-console.log("Firebase belum dikonfigurasi. Menggunakan mode lokal.");
-}
+        window.firebaseAuth = auth;
+        window.signInWithPopup = signInWithPopup;
+        window.GoogleAuthProvider = GoogleAuthProvider;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.signOut = signOut;
+    </script>
+    <style>
+        body { font-family: 'Inter', 'Segoe UI', sans-serif; }
+        .transparent-pattern {
+            background-color: #f3f4f6;
+            background-image: linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #d1d5db; border-radius: 10px; }
+        #canvas-wrapper { transition: transform 0.2s ease-out; transform-origin: center center; }
+        .editable-text-box:empty:before { content: attr(data-placeholder); color: rgba(255, 255, 255, 0.7); }
+        .text-element-wrapper { position: absolute; pointer-events: auto; }
+        .text-drag-handle { cursor: move; }
+        .text-element-wrapper:hover .text-controls, .text-element-wrapper:focus-within .text-controls { opacity: 1; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 h-screen flex flex-col overflow-hidden">
 
-window.firebaseAuth = auth;
-window.signInWithPopup = signInWithPopup;
-window.GoogleAuthProvider = GoogleAuthProvider;
-window.onAuthStateChanged = onAuthStateChanged;
-window.signOut = signOut;
-</script>
-<style>
-body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .canvas-container { background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px; }
-        /* Tampilan pixel/checkerboard dihilangkan dan diganti dengan warna solid bersih */
-        .canvas-bg { background-color: #1f2937; } 
-/* Sembunyikan scrollbar untuk area kerja */
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-@@ -76,7 +77,7 @@
-<i data-lucide="wand-2" class="w-5 h-5 text-indigo-400"></i> Efek & Filter
-</button>
-<button onclick="switchTab('bg')" class="tab-btn w-full text-left px-6 py-3 hover:bg-gray-700 flex items-center gap-3 border-l-4 border-transparent" id="tab-bg">
-                <i data-lucide="image" class="w-5 h-5 text-green-400"></i> Hapus/Ganti BG (Chroma)
-                <i data-lucide="scissors" class="w-5 h-5 text-green-400"></i> Hapus BG (Banyak Foto)
-</button>
-<button onclick="switchTab('collage')" class="tab-btn w-full text-left px-6 py-3 hover:bg-gray-700 flex items-center gap-3 border-l-4 border-transparent" id="tab-collage">
-<i data-lucide="layout-grid" class="w-5 h-5 text-orange-400"></i> Edit Collapse (Kolase)
-@@ -113,63 +114,76 @@
+    <!-- Top Navbar -->
+    <header class="bg-white border-b border-gray-200 h-16 flex justify-between items-center px-4 shrink-0 z-20 shadow-sm">
+        <div class="flex items-center gap-2 md:gap-4">
+            <div class="flex items-center gap-2 text-indigo-600 font-bold text-lg md:text-xl md:mr-2 cursor-pointer shrink-0">
+                <div class="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded flex items-center justify-center text-white">C</div>
+                <span class="hidden sm:inline">Creato</span>
+            </div>
+            
+            <div class="flex items-center border-l border-gray-200 pl-2 md:pl-4 ml-1 md:ml-2 gap-1">
+                <button id="btn-undo" onclick="undo()" disabled class="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition disabled:opacity-30 disabled:hover:bg-transparent" title="Batalkan (Undo)">
+                    <i data-lucide="undo-2" class="w-4 h-4 md:w-5 md:h-5"></i>
+                </button>
+                <button id="btn-redo" onclick="redo()" disabled class="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition disabled:opacity-30 disabled:hover:bg-transparent" title="Ulangi (Redo)">
+                    <i data-lucide="redo-2" class="w-4 h-4 md:w-5 md:h-5"></i>
+                </button>
+            </div>
+        </div>
 
-<div id="panel-bg" class="tool-panel hidden p-4 bg-gray-800 border-b border-gray-700 flex flex-wrap gap-4 items-end">
-<div class="flex-1 min-w-[200px]">
-                    <label class="block text-sm mb-1 text-gray-400">Upload Foto Target</label>
-                    <input type="file" id="bg-fg-upload" accept="image/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-600 file:text-white cursor-pointer">
-                    <label class="block text-sm mb-1 text-gray-400">Upload Foto (Bisa Seleksi Banyak Foto)</label>
-                    <input type="file" id="bg-fg-upload" accept="image/*" multiple class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-600 file:text-white cursor-pointer hover:file:bg-green-700">
-</div>
-                <div class="flex-1 min-w-[100px]">
-                    <label class="block text-sm mb-1 text-gray-400">Warna Latar</label>
-                <div class="flex-1 min-w-[150px]">
-                    <label class="block text-sm mb-1 text-gray-400">Pilih Latar Hasil</label>
-                    <select id="bg-mode-select" class="block w-full h-10 px-3 py-2 rounded cursor-pointer bg-gray-700 border-gray-600 text-white focus:outline-none focus:border-green-500 text-sm">
-                        <option value="transparent">Transparan (Hapus BG Saja)</option>
-                        <option value="color">Warna Solid</option>
-                        <option value="image">Gambar Custom</option>
-                    </select>
-                </div>
-                <div id="bg-color-container" class="hidden flex-1 min-w-[100px]">
-                    <label class="block text-sm mb-1 text-gray-400">Warna</label>
-<input type="color" id="bg-color-picker" value="#00ff00" class="block w-full h-10 p-1 rounded cursor-pointer bg-gray-700 border-gray-600">
-</div>
-                <div class="flex-1 min-w-[200px]">
-                    <label class="block text-sm mb-1 text-gray-400">Atau Upload Gambar Baru</label>
-                <div id="bg-image-container" class="hidden flex-1 min-w-[200px]">
-                    <label class="block text-sm mb-1 text-gray-400">Upload Gambar Latar</label>
-<input type="file" id="bg-bg-upload" accept="image/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-600 file:text-white cursor-pointer">
-</div>
-                <button id="btn-remove-bg" onclick="attemptAction(removeBackgroundAI)" class="bg-green-600 hover:bg-green-700 px-6 py-2 rounded-lg font-medium h-10 w-full md:w-auto mt-2 md:mt-0 flex items-center justify-center gap-2">
-                    <i data-lucide="sparkles" class="w-4 h-4"></i> Hapus BG (AI)
-                <button id="btn-remove-bg" onclick="attemptAction(removeBackgroundAIBatch)" class="bg-green-600 hover:bg-green-700 px-6 py-2 rounded-lg font-medium h-10 w-full md:w-auto mt-2 md:mt-0 flex items-center justify-center gap-2">
-                    <i data-lucide="sparkles" class="w-4 h-4"></i> Eksekusi AI
-</button>
-</div>
+        <!-- Nama File Input -->
+        <div class="flex-1 max-w-md mx-2 md:mx-4 flex items-center justify-center">
+            <input type="text" id="global-filename" value="Desain_Tanpa_Judul" class="text-center font-medium text-gray-700 bg-transparent hover:bg-gray-100 focus:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-100 px-2 py-1 md:py-1.5 rounded transition w-full max-w-[150px] md:max-w-[250px] border border-transparent hover:border-gray-200 text-sm md:text-base text-ellipsis overflow-hidden">
+        </div>
 
-<div id="panel-collage" class="tool-panel hidden p-4 bg-gray-800 border-b border-gray-700 flex gap-4 items-end">
-<div class="flex-1">
-<label class="block text-sm mb-1 text-gray-400">Pilih Beberapa Foto (Max 4)</label>
-                    <input type="file" id="collage-upload" accept="image/*" multiple class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-600 file:text-white cursor-pointer">
-                    <input type="file" id="collage-upload" accept="image/*" multiple class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-600 file:text-white cursor-pointer hover:file:bg-orange-700">
-</div>
-<button onclick="attemptAction(createCollage)" class="bg-orange-600 hover:bg-orange-700 px-6 py-2 rounded-lg font-medium h-10">Buat Kolase</button>
-</div>
+        <div class="flex items-center gap-2 md:gap-3 shrink-0">
+            <button id="auth-btn" onclick="handleAuthClick()" class="hidden lg:flex text-gray-600 hover:text-gray-900 font-medium px-3 py-2 rounded items-center gap-2 text-sm transition">
+                <img src="https://ui-avatars.com/api/?name=Guest&background=e5e7eb&color=374151" id="user-avatar" class="w-7 h-7 rounded-full"> <span id="user-name">Guest (Sisa: 3)</span>
+            </button>
+            <button onclick="attemptAction(downloadResult)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 md:px-5 py-2 rounded-md font-semibold text-xs md:text-sm flex items-center gap-1.5 shadow-sm transition">
+                <i data-lucide="download" class="w-4 h-4"></i> <span class="hidden sm:inline">Bagikan / Unduh</span><span class="sm:hidden">Unduh</span>
+            </button>
+        </div>
+    </header>
 
-<div id="panel-video" class="tool-panel hidden p-4 bg-gray-800 border-b border-gray-700 flex gap-4 items-end">
-<div class="flex-1">
-<label class="block text-sm mb-1 text-gray-400">Upload Video Utama</label>
-                    <input type="file" id="vid-upload" accept="video/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-red-600 file:text-white cursor-pointer">
-                    <input type="file" id="vid-upload" accept="video/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-red-600 file:text-white cursor-pointer hover:file:bg-red-700">
-</div>
-<div class="flex-1">
-<label class="block text-sm mb-1 text-gray-400">Upload Musik Latar (Backsound)</label>
-                    <input type="file" id="aud-upload" accept="audio/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-600 file:text-white cursor-pointer">
-                    <input type="file" id="aud-upload" accept="audio/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-600 file:text-white cursor-pointer hover:file:bg-gray-700">
-</div>
-<button onclick="attemptAction(startVideoRecord)" id="record-btn" class="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-lg font-medium h-10 flex gap-2 items-center">
-<i data-lucide="play" class="w-4 h-4"></i> Proses & Gabungkan
-</button>
-</div>
-
-<!-- Canvas / Preview Area -->
-            <div class="flex-1 p-6 overflow-auto canvas-container flex items-center justify-center relative">
-                <!-- Image Canvas -->
-            <div class="flex-1 p-6 overflow-hidden canvas-bg flex items-center justify-center relative">
-                
-                <!-- Main Singular Canvas (Effects / Collage) -->
-<canvas id="main-canvas" class="max-w-full max-h-full shadow-2xl rounded" style="display:none;"></canvas>
-
-                <!-- Batch Results Grid (Hapus BG) -->
-                <div id="batch-results" class="hidden w-full h-full grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto content-start pb-20 no-scrollbar"></div>
-                
-<!-- Video Preview -->
-<div id="video-container" class="hidden relative w-full h-full flex items-center justify-center">
-<video id="main-video" class="max-w-full max-h-full rounded shadow-2xl" controls></video>
-<audio id="main-audio" class="hidden"></audio>
-</div>
-
-                <!-- Empty State Placeholder -->
-<div id="empty-state" class="text-gray-500 text-center flex flex-col items-center">
-<i data-lucide="image-plus" class="w-16 h-16 mb-4 opacity-50"></i>
-                    <p class="text-lg">Silakan upload file untuk memulai</p>
-                    <p class="text-lg font-medium">Silakan upload file untuk memulai</p>
-</div>
-</div>
-
-<!-- Export Button (Bottom Right) -->
-            <div class="absolute bottom-6 right-6">
-            <div class="absolute bottom-6 right-6 z-20">
-<button onclick="attemptAction(downloadResult)" class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8 py-3 rounded-full font-bold shadow-lg flex items-center gap-2 transform hover:scale-105 transition">
-<i data-lucide="download" class="w-5 h-5"></i> Ekspor / Download
-</button>
-@@ -206,7 +220,9 @@
-let currentTab = 'effects';
-let originalImage = new Image();
-let bgImageObj = new Image();
-        let bgMode = 'color'; // Menyimpan state pilihan latar: 'color' atau 'image'
-        let bgMode = 'transparent'; // Secara default 'Transparan'
-        let batchFiles = []; // Array penampung multiple foto
+    <!-- Main Workspace (Responsive Flex) -->
+    <div class="flex flex-1 overflow-hidden flex-col md:flex-row">
         
-let canvas = document.getElementById('main-canvas');
-let ctx = canvas.getContext('2d', { willReadFrequently: true });
-let currentUser = null;
-@@ -215,6 +231,7 @@
-// Elemen DOM
-const emptyState = document.getElementById('empty-state');
-const videoContainer = document.getElementById('video-container');
-        const batchResultsContainer = document.getElementById('batch-results');
-const videoEl = document.getElementById('main-video');
-const audioEl = document.getElementById('main-audio');
+        <!-- Navigasi Menu Kiri (Bawah di Mobile) -->
+        <nav class="w-full md:w-20 bg-white border-t md:border-t-0 md:border-r border-gray-200 flex flex-row md:flex-col items-center justify-around md:justify-start py-2 md:py-4 gap-2 z-20 shadow-sm shrink-0 order-last md:order-first overflow-x-auto h-16 md:h-auto">
+            <button class="nav-btn w-16 h-12 md:h-16 flex flex-col items-center justify-center gap-1 rounded-lg text-indigo-600 bg-indigo-50 transition shrink-0" id="nav-main" onclick="switchTab('main')">
+                <i data-lucide="layers" class="w-5 h-5 md:w-6 md:h-6"></i>
+                <span class="text-[10px] font-semibold">Desain</span>
+            </button>
+            <button class="nav-btn w-16 h-12 md:h-16 flex flex-col items-center justify-center gap-1 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition shrink-0" id="nav-collage" onclick="switchTab('collage')">
+                <i data-lucide="layout-grid" class="w-5 h-5 md:w-6 md:h-6"></i>
+                <span class="text-[10px] font-semibold">Kolase</span>
+            </button>
+            <button class="nav-btn w-16 h-12 md:h-16 flex flex-col items-center justify-center gap-1 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition shrink-0" id="nav-video" onclick="switchTab('video')">
+                <i data-lucide="film" class="w-5 h-5 md:w-6 md:h-6"></i>
+                <span class="text-[10px] font-semibold">Video</span>
+            </button>
+        </nav>
 
-@@ -237,10 +254,8 @@
-document.getElementById('login-modal').classList.remove('hidden');
-return;
-}
-            // Eksekusi aksi (Export, Edit, dll)
-actionCallback();
+        <!-- PANEL 1: DESAIN UTAMA (Di Atas Navigasi pada Mobile) -->
+        <aside id="panel-main" class="w-full md:w-80 bg-white border-t md:border-t-0 md:border-r border-gray-200 flex flex-col shadow-sm z-10 overflow-y-auto custom-scrollbar shrink-0 h-[40vh] md:h-auto order-2 md:order-none">
+            
+            <div class="p-4 md:p-5 border-b border-gray-100 bg-gray-50 shrink-0">
+                <input type="file" id="img-upload" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                <button onclick="document.getElementById('img-upload').click()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2 transition shadow-sm">
+                    <i data-lucide="upload-cloud" class="w-5 h-5"></i> Unggah Gambar Utama
+                </button>
+            </div>
 
-            // Catat penggunaan jika belum login
-if (!currentUser) {
-freeTries++;
-localStorage.setItem('creato_tries', freeTries);
-@@ -254,7 +269,6 @@
-
-function handleAuthClick() {
-if (currentUser) {
-                // Logout (Simulasi atau Real Firebase)
-if(window.firebaseAuth) { window.signOut(window.firebaseAuth); }
-currentUser = null;
-document.getElementById('auth-btn').innerHTML = '<i data-lucide="log-in" class="w-4 h-4"></i> Login Google';
-@@ -267,17 +281,14 @@
-}
-
-async function handleGoogleLogin() {
-            // Jika Firebase belum diset di GitHub pages, gunakan Mock Login agar UI tetap berjalan
-if (!window.firebaseAuth || window.firebaseAuth.app.options.apiKey === "MOCK_API_KEY") {
-                console.log("Menggunakan Mock Login (Ganti konfigurasi Firebase di HTML untuk real login)");
-                showToast("Menggunakan Simulasi Login. (Ganti MOCK_API_KEY untuk asli)");
-setTimeout(() => {
-                    currentUser = { displayName: "Pengguna Mock" };
-                    currentUser = { displayName: "User Pro" };
-processLoginSuccess();
-}, 1000);
-return;
-}
-
-            // Real Firebase Login
-try {
-const provider = new window.GoogleAuthProvider();
-const result = await window.signInWithPopup(window.firebaseAuth, provider);
-@@ -299,38 +310,37 @@
-// ==== NAVIGASI TAB ====
-function switchTab(tabId) {
-currentTab = tabId;
-            // Sembunyikan semua panel
-document.querySelectorAll('.tool-panel').forEach(el => el.classList.add('hidden'));
-document.querySelectorAll('.tab-btn').forEach(el => {
-el.classList.remove('border-l-4', 'border-indigo-500', 'border-green-500', 'border-orange-500', 'border-red-500', 'bg-gray-700');
-el.classList.add('border-transparent');
-});
-
-            // Tampilkan panel aktif
-document.getElementById(`panel-${tabId}`).classList.remove('hidden');
-const activeBtn = document.getElementById(`tab-${tabId}`);
-activeBtn.classList.add('bg-gray-700', 'border-l-4');
-
-            // Set warna border aktif
-if(tabId === 'effects') activeBtn.classList.add('border-indigo-500');
-if(tabId === 'bg') activeBtn.classList.add('border-green-500');
-if(tabId === 'collage') activeBtn.classList.add('border-orange-500');
-if(tabId === 'video') activeBtn.classList.add('border-red-500');
-
-            // Toggle Canvas vs Video view
-            // Reset visibilitas layar utama
-            canvas.style.display = 'none';
-            videoContainer.classList.add('hidden');
-            batchResultsContainer.classList.add('hidden');
-            emptyState.classList.add('hidden');
-
-            // Atur apa yang tampil berdasarkan tab
-if(tabId === 'video') {
-                canvas.style.display = 'none';
-videoContainer.classList.remove('hidden');
-                emptyState.classList.add('hidden');
-                if(!videoEl.src) emptyState.classList.remove('hidden');
-            } else if (tabId === 'bg') {
-                if(batchFiles.length > 0) batchResultsContainer.classList.remove('hidden');
-                else emptyState.classList.remove('hidden');
-} else {
-                videoContainer.classList.add('hidden');
-                if(originalImage.src || tabId === 'collage') {
-                    canvas.style.display = 'block';
-                    emptyState.classList.add('hidden');
-                } else {
-                    canvas.style.display = 'none';
-                    emptyState.classList.remove('hidden');
-                }
-                if(originalImage.src || tabId === 'collage') canvas.style.display = 'block';
-                else emptyState.classList.remove('hidden');
-}
-}
-
-@@ -365,22 +375,32 @@
-}
-
-
-        // ==== FITUR: GANTI BACKGROUND (CHROMA KEY / GREEN-WHITE SCREEN) ====
-        // ==== FITUR: HAPUS BACKGROUND BATCH/BULK (AI) ====
-        document.getElementById('bg-mode-select').addEventListener('change', function(e) {
-            bgMode = e.target.value;
-            document.getElementById('bg-color-container').classList.toggle('hidden', bgMode !== 'color');
-            document.getElementById('bg-image-container').classList.toggle('hidden', bgMode !== 'image');
-        });
-
-document.getElementById('bg-fg-upload').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if(file) {
-                const reader = new FileReader();
-                reader.onload = (ev) => { originalImage.src = ev.target.result; };
-                reader.readAsDataURL(file);
-            batchFiles = Array.from(e.target.files);
-            if(batchFiles.length > 0) {
-                emptyState.classList.add('hidden');
-                canvas.style.display = 'none';
-                batchResultsContainer.classList.remove('hidden');
+            <!-- Template / Twibbon -->
+            <div class="p-4 md:p-5 border-b border-gray-100 shrink-0">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Template / Twibbon</h3>
+                <button onclick="document.getElementById('template-upload').click()" class="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium py-2 rounded border border-indigo-200 text-sm transition flex justify-center items-center gap-2 mb-2">
+                    <i data-lucide="plus-square" class="w-4 h-4"></i> Unggah & Simpan Template
+                </button>
+                <p class="text-[10px] text-gray-500 mb-3 leading-tight italic">*Unggah <b>.PNG</b> untuk Bingkai Depan (Twibbon) atau <b>.JPG</b> untuk Latar Belakang.</p>
+                <input type="file" id="template-upload" accept="image/png, image/jpeg" class="hidden" onchange="handleTemplateUpload(event)">
                 
-                batchResultsContainer.innerHTML = `
-                    <div class="col-span-full text-center mt-12">
-                        <i data-lucide="layers" class="w-16 h-16 text-green-500/50 mx-auto mb-4"></i>
-                        <h3 class="text-xl font-bold text-gray-300">Siap memproses ${batchFiles.length} foto sekaligus!</h3>
-                        <p class="text-gray-500 mt-2">Pilih tipe latar belakang pada menu di atas, lalu klik <b>Eksekusi AI</b>.</p>
+                <div id="saved-templates-grid" class="grid grid-cols-4 md:grid-cols-3 gap-2"></div>
+                <button onclick="clearActiveTemplate()" class="mt-3 text-xs text-red-500 hover:text-red-700 hidden w-full text-center" id="btn-clear-template">Lepaskan Template Aktif</button>
+            </div>
+
+            <!-- Teks -->
+            <div class="p-4 md:p-5 border-b border-gray-100 shrink-0">
+                <button onclick="addTextElement('Teks Baru', 'body')" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 rounded-lg flex items-center justify-center gap-2 transition shadow-sm mb-3">
+                    <i data-lucide="type" class="w-5 h-5"></i> Tambahkan kotak teks
+                </button>
+                <button onclick="attemptAction(generateAICaption)" id="btn-ai-caption" class="w-full bg-white border border-purple-200 hover:bg-purple-50 text-purple-700 font-semibold py-2 rounded-lg flex items-center justify-center gap-2 transition shadow-sm mb-4">
+                    <i data-lucide="sparkles" class="w-5 h-5"></i> Tulisan Ajaib (AI)
+                </button>
+
+                <div id="text-format-controls" class="space-y-3 p-3 bg-indigo-50 rounded-lg border border-indigo-100 hidden mb-4">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs font-bold text-indigo-800 uppercase tracking-wider">Edit Teks Aktif</span>
+                        <button onclick="deleteActiveText()" class="text-red-500 hover:text-red-700 p-1 bg-white rounded shadow-sm" title="Hapus"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                     </div>
-                `;
-                lucide.createIcons();
-}
-});
-        
-        document.getElementById('bg-color-picker').addEventListener('input', function(e) {
-            bgMode = 'color'; // Pindah mode ke warna
-        });
-
-document.getElementById('bg-bg-upload').addEventListener('change', function(e) {
-            bgMode = 'image'; // Pindah mode ke gambar
-const file = e.target.files[0];
-if(file) {
-const reader = new FileReader();
-@@ -389,69 +409,93 @@
-}
-});
-
-        async function removeBackgroundAI() {
-            if(!originalImage.src) { showToast("Upload foto target dulu!"); return; }
-            
-        async function removeBackgroundAIBatch() {
-            if(batchFiles.length === 0) { showToast("Upload foto target dulu!"); return; }
-if (!window.imglyRemoveBackground) {
-                showToast("Sistem AI sedang memuat, silakan tunggu beberapa detik dan coba lagi.");
-                showToast("Sistem AI sedang memuat, silakan tunggu.");
-return;
-}
-
-const btn = document.getElementById('btn-remove-bg');
-            btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Memproses AI...';
-btn.disabled = true;
-
-            // AI butuh waktu mengunduh modelnya di percobaan pertama, beri tahu user
-            showToast("Sedang memproses AI... (Proses pertama butuh internet lancar)", 4000);
-            batchResultsContainer.innerHTML = ''; 
-            batchResultsContainer.classList.remove('hidden');
-
-try {
-                canvas.width = originalImage.width;
-                canvas.height = originalImage.height;
-                
-                // 1. Ubah gambar asli menjadi Blob agar bisa dibaca oleh AI
-                const res = await fetch(originalImage.src);
-                const blob = await res.blob();
-                
-                // 2. Eksekusi AI tanpa meng-override publicPath agar mengambil model dari CDN bawaannya (static.imgly.com)
-                const imageWithoutBgBlob = await window.imglyRemoveBackground(blob);
-                const imageWithoutBgUrl = URL.createObjectURL(imageWithoutBgBlob);
-
-                // 3. Gabungkan hasil potongan AI dengan warna/gambar latar belakang pilihan user
-                let processedImg = new Image();
-                processedImg.onload = () => {
-                    // Gambar latar belakang (Warna / Gambar upload)
-                // Loop memproses setiap foto yang diunggah
-                for (let i = 0; i < batchFiles.length; i++) {
-                    const file = batchFiles[i];
-                    btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Memproses ${i+1}/${batchFiles.length}...`;
-                    
-                    // Baca gambar orisinil
-                    const blobUrl = URL.createObjectURL(file);
-                    const img = new Image();
-                    await new Promise(r => { img.onload = r; img.src = blobUrl; });
-
-                    // Panggil AI dari Imgly
-                    const imageWithoutBgBlob = await window.imglyRemoveBackground(file);
-                    const imageWithoutBgUrl = URL.createObjectURL(imageWithoutBgBlob);
-                    
-                    const processedImg = new Image();
-                    await new Promise(r => { processedImg.onload = r; processedImg.src = imageWithoutBgUrl; });
-
-                    // Gunakan Canvas tersembunyi untuk menggabungkan latar belakang
-                    let tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = img.width;
-                    tempCanvas.height = img.height;
-                    let tCtx = tempCanvas.getContext('2d');
-
-                    // Tempel latar belakang sesuai mode yang dipilih pengguna
-if (bgMode === 'color') {
-                        ctx.fillStyle = document.getElementById('bg-color-picker').value;
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
-                        tCtx.fillStyle = document.getElementById('bg-color-picker').value;
-                        tCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-} else if (bgMode === 'image' && bgImageObj.src) {
-                        ctx.drawImage(bgImageObj, 0, 0, canvas.width, canvas.height);
-                    } else {
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        tCtx.drawImage(bgImageObj, 0, 0, tempCanvas.width, tempCanvas.height);
-}
-
-                    // Gambar hasil krop wajah/badan di atas layar
-                    ctx.drawImage(processedImg, 0, 0, canvas.width, canvas.height);
-                    // Jika bgMode == 'transparent', kanvas dibiarkan kosong
-
-                    canvas.style.display = 'block';
-                    emptyState.classList.add('hidden');
-                    // Tempel hasil crop subjek AI di atasnya
-                    tCtx.drawImage(processedImg, 0, 0, tempCanvas.width, tempCanvas.height);
-
-                    // Konversi ke format final Blob agar hemat memori browser
-                    const finalUrl = await new Promise(resolve => {
-                        tempCanvas.toBlob(blob => resolve(URL.createObjectURL(blob)), 'image/png');
-                    });
-
-                    // Buat Card UI untuk menampung gambar
-                    const card = document.createElement('div');
-                    card.className = "bg-gray-800 p-3 rounded-xl border border-gray-700 flex flex-col items-center shadow-lg transition transform hover:-translate-y-1 h-fit";
-
-                    // Kembalikan tombol seperti semula
-                    btn.innerHTML = '<i data-lucide="sparkles" class="w-4 h-4"></i> Hapus BG (AI)';
-                    btn.disabled = false;
-                    // Gunakan checkerboard SANGAT TIPIS HANYA di dalam frame kecil gambar untuk membedakan transparansi
-                    const innerBgClass = bgMode === 'transparent' ? 'bg-[url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'8\' height=\'8\' viewBox=\'0 0 8 8\'%3E%3Cpath fill=\'%23374151\' d=\'M0 0h4v4H0zm4 4h4v4H4z\'/%3E%3C/svg%3E")]' : 'bg-gray-900';
-
-                    let originalName = file.name.split('.').slice(0, -1).join('.');
-                    if(!originalName) originalName = "foto";
-
-                    card.innerHTML = `
-                        <div class="w-full aspect-square rounded-lg mb-3 overflow-hidden ${innerBgClass} flex items-center justify-center relative shadow-inner">
-                            <img src="${finalUrl}" class="max-w-full max-h-full object-contain">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded border border-gray-300 overflow-hidden relative cursor-pointer flex-shrink-0">
+                            <input type="color" id="active-text-color" class="absolute -top-2 -left-2 w-16 h-16 cursor-pointer" oninput="updateActiveTextFormat()" onchange="saveState()">
                         </div>
-                        <a href="${finalUrl}" download="${originalName}_nobg.png" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-2 rounded-lg w-full text-center flex items-center justify-center gap-2 font-medium transition">
-                            <i data-lucide="download" class="w-4 h-4"></i> Download
-                        </a>
-                    `;
-                    batchResultsContainer.appendChild(card);
-lucide.createIcons();
-                    showToast("Selesai! Subjek berhasil dipotong dengan AI.");
-                };
-                processedImg.src = imageWithoutBgUrl;
+                        <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 shadow-sm">
+                            <span class="text-gray-400 text-xs mr-2">Ukuran</span>
+                            <input type="number" id="active-text-size" class="w-full py-1.5 text-sm focus:outline-none" oninput="updateActiveTextFormat()" onchange="saveState()" min="10" max="500">
+                        </div>
+                    </div>
+                    <!-- Lebar (Width) dan Rotasi -->
+                    <div class="space-y-2 mt-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-500 text-[11px] w-10 font-medium">Lebar</span>
+                            <input type="range" id="active-text-width" class="flex-1 h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-indigo-600" min="50" max="1500" value="1500" oninput="updateActiveTextFormat()" onchange="saveState()">
+                            <span id="width-val" class="text-[11px] text-gray-500 w-8 text-right">Auto</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-500 text-[11px] w-10 font-medium">Rotasi</span>
+                            <input type="range" id="active-text-rotation" class="flex-1 h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-indigo-600" min="0" max="360" value="0" oninput="updateActiveTextFormat()" onchange="saveState()">
+                            <span id="rot-val" class="text-[11px] text-gray-500 w-8 text-right">0°</span>
+                        </div>
+                    </div>
+                </div>
 
-                }
-                showToast("Selesai! Semua foto berhasil diproses.");
-} catch (error) {
-console.error(error);
-showToast("Gagal! Pastikan perangkat Anda terkoneksi internet.");
-                btn.innerHTML = '<i data-lucide="sparkles" class="w-4 h-4"></i> Hapus BG (AI)';
-            } finally {
-                btn.innerHTML = '<i data-lucide="sparkles" class="w-4 h-4"></i> Eksekusi AI';
-btn.disabled = false;
-lucide.createIcons();
-}
-}
+                <div class="space-y-2 mt-2">
+                    <h4 class="text-xs font-semibold text-gray-500 mb-2">Gaya teks default</h4>
+                    <button onclick="addTextElement('Tambahkan judul', 'title')" class="w-full text-left px-3 py-3 hover:bg-gray-50 rounded border border-gray-200 text-2xl font-bold text-gray-800 transition shadow-sm bg-white">Tambahkan judul</button>
+                    <button onclick="addTextElement('Tambahkan subjudul', 'subtitle')" class="w-full text-left px-3 py-2 hover:bg-gray-50 rounded border border-gray-200 text-lg font-semibold text-gray-700 transition shadow-sm bg-white">Tambahkan subjudul</button>
+                </div>
+            </div>
 
+            <!-- Studio Ajaib -->
+            <div class="p-4 md:p-5 border-b border-gray-100 shrink-0">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1">
+                    <i data-lucide="sparkles" class="w-3 h-3 text-purple-500"></i> Studio Ajaib
+                </h3>
+                <button id="btn-hapus-bg" onclick="applyBackgroundRemoval()" class="w-full flex items-center gap-3 p-3 bg-gradient-to-r from-indigo-50 to-purple-50 border border-purple-100 rounded-xl hover:shadow-md hover:border-purple-300 transition group disabled:opacity-50">
+                    <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm text-purple-600 group-hover:scale-110 transition shrink-0">
+                        <i data-lucide="scissors" class="w-5 h-5" id="icon-hapus-bg"></i>
+                    </div>
+                    <div class="text-left">
+                        <span class="block text-sm font-bold text-gray-800">Penghapus LB</span>
+                        <span class="block text-[10px] text-gray-500 leading-tight mt-0.5">Hapus latar belakang foto asli secara otomatis.</span>
+                    </div>
+                </button>
+            </div>
 
-// ==== FITUR: KOLASE (COLLAPSE PHOTO) ====
-function createCollage() {
-const files = document.getElementById('collage-upload').files;
-@@ -460,7 +504,6 @@
-canvas.style.display = 'block';
-emptyState.classList.add('hidden');
+            <!-- Latar Belakang -->
+            <div class="p-4 md:p-5 border-b border-gray-100 shrink-0">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Latar Belakang</h3>
+                <div class="space-y-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full border border-gray-300 overflow-hidden relative cursor-pointer shrink-0">
+                            <input type="color" id="bg-color-picker" value="#ffffff" class="absolute -top-2 -left-2 w-16 h-16 cursor-pointer" oninput="setBgMode('color')" onchange="saveState()">
+                        </div>
+                        <span class="text-sm text-gray-600 font-medium">Pilih Warna Solid</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="setBgMode('transparent'); saveState();" class="flex-1 bg-white hover:bg-gray-50 text-gray-700 py-2 rounded border border-gray-200 text-sm font-medium transition shadow-sm">Transparan</button>
+                        <button onclick="document.getElementById('bg-image-upload').click()" class="flex-1 bg-white hover:bg-gray-50 text-gray-700 py-2 rounded border border-gray-200 text-sm font-medium transition shadow-sm flex justify-center items-center gap-1">
+                            <i data-lucide="image" class="w-4 h-4"></i> Gambar
+                        </button>
+                        <input type="file" id="bg-image-upload" accept="image/*" class="hidden" onchange="handleBgImageUpload(event)">
+                    </div>
+                </div>
+            </div>
 
-            // Set ukuran kanvas persegi standar
-canvas.width = 1000;
-canvas.height = 1000;
-ctx.fillStyle = '#ffffff';
-@@ -469,7 +512,6 @@
-let loadedImages = 0;
-let imgElements = [];
+            <!-- Sesuaikan & Transformasi -->
+            <div class="p-4 md:p-5 pb-8 shrink-0">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Sesuaikan Gambar</h3>
+                <div class="space-y-4">
+                    <div class="pb-3 border-b border-gray-100">
+                        <div class="flex justify-between text-sm text-gray-600 mb-1">
+                            <span>Ukuran Foto Utama</span>
+                            <span id="val-scale" class="text-xs text-gray-400">100%</span>
+                        </div>
+                        <input type="range" id="filter-scale" min="10" max="300" value="100" class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" oninput="updateImageScale(this.value)" onchange="saveState()">
+                        <button onclick="resetImagePos()" class="text-[11px] text-indigo-500 hover:text-indigo-700 mt-2 flex items-center gap-1 font-medium bg-indigo-50 px-2 py-1 rounded"><i data-lucide="refresh-cw" class="w-3 h-3"></i> Reset Posisi & Skala</button>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm text-gray-600 mb-1"><span>Kecerahan</span><span id="val-bright" class="text-xs text-gray-400">0</span></div>
+                        <input type="range" id="filter-bright" min="0" max="200" value="100" class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" oninput="applyFilters()" onchange="saveState()">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm text-gray-600 mb-1"><span>Kontras</span><span id="val-contrast" class="text-xs text-gray-400">0</span></div>
+                        <input type="range" id="filter-contrast" min="0" max="200" value="100" class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" oninput="applyFilters()" onchange="saveState()">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm text-gray-600 mb-1"><span>Buram (Blur)</span><span id="val-blur" class="text-xs text-gray-400">0</span></div>
+                        <input type="range" id="filter-blur" min="0" max="20" value="0" class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" oninput="applyFilters()" onchange="saveState()">
+                    </div>
+                </div>
+            </div>
+        </aside>
 
-            // Muat semua gambar
-for (let i = 0; i < files.length && i < 4; i++) {
-let img = new Image();
-img.onload = () => {
-@@ -495,22 +537,19 @@
-let x = col * cellW;
-let y = row * cellH;
-
-                // Draw image with object-fit: cover simulation
-let r = Math.min(cellW / img.width, cellH / img.height);
-let nw = img.width * r;
-let nh = img.height * r;
-let offsetX = x + (cellW - nw) / 2;
-let offsetY = y + (cellH - nh) / 2;
-
-                // Set kliping untuk grid
-ctx.save();
-ctx.beginPath();
-ctx.rect(x, y, cellW, cellH);
-ctx.clip();
-ctx.drawImage(img, offsetX, offsetY, nw, nh);
-ctx.restore();
-
-                // Garis putih
-ctx.strokeStyle = 'white';
-ctx.lineWidth = 10;
-ctx.strokeRect(x, y, cellW, cellH);
-@@ -519,7 +558,7 @@
-}
-
-
-        // ==== FITUR: VIDEO MUXING (GABUNG VIDEO & AUDIO VIA BROWSER) ====
-        // ==== FITUR: VIDEO MUXING ====
-document.getElementById('vid-upload').addEventListener('change', function(e) {
-const file = e.target.files[0];
-if(file) videoEl.src = URL.createObjectURL(file);
-@@ -539,24 +578,18 @@
-const btn = document.getElementById('record-btn');
-btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Memproses...';
-
-            // Mute video asli agar suara dari elemen <audio> yang masuk
-videoEl.muted = true; 
-
-            // Tangkap stream dari elemen video (visual)
-const videoStream = videoEl.captureStream();
+        <!-- PANEL 2: KOLASE -->
+        <aside id="panel-collage" class="hidden w-full md:w-80 bg-white border-t md:border-t-0 md:border-r border-gray-200 flex-col shadow-sm z-10 overflow-y-auto custom-scrollbar shrink-0 p-5 h-[40vh] md:h-auto order-2 md:order-none">
+            <h2 class="text-lg font-bold text-gray-800 mb-2">Pembuat Kolase</h2>
+            <p class="text-sm text-gray-500 mb-6 leading-relaxed">Pilih hingga 4 foto untuk digabungkan menjadi satu bingkai rapi secara otomatis.</p>
             
-            // Buat Audio Context untuk menggabungkan suara
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-const dest = audioCtx.createMediaStreamDestination();
+            <input type="file" id="collage-upload" accept="image/*" multiple class="hidden">
+            <button onclick="document.getElementById('collage-upload').click()" class="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold py-3 rounded-lg flex flex-col items-center justify-center gap-2 transition shadow-sm mb-4">
+                <i data-lucide="images" class="w-6 h-6"></i> Pilih Beberapa Foto
+            </button>
+            <button onclick="attemptAction(createCollage)" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-lg shadow-md transition flex justify-center items-center gap-2">
+                <i data-lucide="layout-template" class="w-5 h-5"></i> Rangkai Kolase
+            </button>
+        </aside>
 
-            // Sambungkan audio file ke stream
-if(audioEl.src) {
-const sourceNode = audioCtx.createMediaElementSource(audioEl);
-sourceNode.connect(dest);
-                sourceNode.connect(audioCtx.destination); // Play di speaker
-                sourceNode.connect(audioCtx.destination); 
-}
+        <!-- PANEL 3: VIDEO -->
+        <aside id="panel-video" class="hidden w-full md:w-80 bg-white border-t md:border-t-0 md:border-r border-gray-200 flex-col shadow-sm z-10 overflow-y-auto custom-scrollbar shrink-0 p-5 h-[40vh] md:h-auto order-2 md:order-none">
+            <h2 class="text-lg font-bold text-gray-800 mb-2">Editor Video</h2>
+            <p class="text-sm text-gray-500 mb-6 leading-relaxed">Gabungkan video bisu Anda dengan musik latar secara instan.</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">1. Video Utama</label>
+                    <input type="file" id="vid-upload" accept="video/*" class="block w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 cursor-pointer border border-gray-200 rounded-lg p-1 bg-white shadow-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">2. Musik Latar</label>
+                    <input type="file" id="aud-upload" accept="audio/*" class="block w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 cursor-pointer border border-gray-200 rounded-lg p-1 bg-white shadow-sm">
+                </div>
+                <hr class="border-gray-100 my-4">
+                <button onclick="attemptAction(startVideoRecord)" id="record-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg shadow-md transition flex justify-center items-center gap-2">
+                    <i data-lucide="film" class="w-5 h-5"></i> Gabungkan & Unduh
+                </button>
+            </div>
+        </aside>
 
-            // Gabungkan track video dan track audio
-const combinedStream = new MediaStream([
-...videoStream.getVideoTracks(),
-...dest.stream.getAudioTracks()
-@@ -572,7 +605,6 @@
-const blob = new Blob(recordedChunks, { type: 'video/webm' });
-const url = URL.createObjectURL(blob);
+        <!-- Canvas Area (Center, Di Atas pada Mobile) -->
+        <main class="flex-1 bg-gray-100 relative flex flex-col overflow-hidden order-1 md:order-none" id="workspace-container">
+            
+            <div class="flex-1 p-4 md:p-8 overflow-hidden flex items-center justify-center relative transparent-pattern" id="workspace-area">
+                
+                <!-- Canvas Wrapper -->
+                <div id="canvas-wrapper" class="relative shadow-2xl transition-transform duration-200 ease-out bg-white select-none" style="display: none; transform: scale(1);">
+                    <canvas id="main-canvas" class="block max-w-full h-auto cursor-grab active:cursor-grabbing"></canvas>
+                    <div id="text-layer" class="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden"></div>
+                </div>
 
-                // Otomatis Download
-const a = document.createElement('a');
-a.style.display = 'none';
-a.href = url;
-@@ -587,27 +619,30 @@
-recordedChunks = [];
-};
+                <!-- Video Container -->
+                <div id="video-container" class="hidden relative w-full h-full flex flex-col items-center justify-center p-4">
+                    <video id="main-video" class="max-w-full max-h-[70vh] rounded-lg shadow-xl" controls></video>
+                    <audio id="main-audio" class="hidden"></audio>
+                </div>
 
-            // Mainkan video dan audio serentak, lalu mulai rekam
-videoEl.play();
-if(audioEl.src) audioEl.play();
-mediaRecorder.start();
+                <!-- Empty State -->
+                <div id="empty-state" class="text-center px-4">
+                    <div class="w-20 h-20 md:w-24 md:h-24 bg-white rounded-2xl shadow-sm mx-auto flex items-center justify-center mb-4 text-indigo-300">
+                        <i data-lucide="image-plus" class="w-10 h-10 md:w-12 md:h-12"></i>
+                    </div>
+                    <h2 class="text-lg md:text-xl font-bold text-gray-700">Mulai Berkarya</h2>
+                    <p class="text-gray-500 mt-2 text-sm max-w-xs mx-auto" id="empty-state-text">Pilih fitur di panel sebelah kiri untuk memulai mendesain.</p>
+                </div>
 
-            // Berhenti rekam saat video selesai
-videoEl.onended = () => {
-mediaRecorder.stop();
-if(audioEl.src) audioEl.pause();
-};
-}
+            </div>
 
+            <!-- Bottom Bar (Zoom Slider) -->
+            <div class="h-10 md:h-12 bg-white border-t border-gray-200 flex items-center justify-end px-4 md:px-6 shadow-sm z-10 shrink-0">
+                <div class="flex items-center gap-2 md:gap-3">
+                    <span class="text-[10px] md:text-xs text-gray-500 font-medium w-8 text-right" id="zoom-val">100%</span>
+                    <button onclick="adjustZoom(-10)" class="p-1 text-gray-400 hover:text-gray-700 rounded transition"><i data-lucide="minus" class="w-3 h-3 md:w-4 md:h-4"></i></button>
+                    <input type="range" id="zoom-slider" min="10" max="200" value="100" class="w-24 md:w-32 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" oninput="updateZoom(this.value)">
+                    <button onclick="adjustZoom(10)" class="p-1 text-gray-400 hover:text-gray-700 rounded transition"><i data-lucide="plus" class="w-3 h-3 md:w-4 md:h-4"></i></button>
+                </div>
+            </div>
+        </main>
+    </div>
 
-        // ==== EKSPOR GAMBAR ====
-        // ==== TOMBOL EKSPOR UTAMA ====
-function downloadResult() {
-if(currentTab === 'video') {
-                showToast("Gunakan tombol 'Proses & Gabungkan' di panel video.");
-                showToast("Gunakan tombol 'Proses & Gabungkan' di panel editor video atas.");
-                return;
+    <!-- Modal Login Freemium -->
+    <div id="login-modal" class="fixed inset-0 bg-gray-900/50 hidden flex items-center justify-center z-50 backdrop-blur-sm px-4">
+        <div class="bg-white p-6 md:p-8 rounded-2xl max-w-md w-full text-center shadow-2xl">
+            <div class="w-14 h-14 md:w-16 md:h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600">
+                <i data-lucide="lock" class="w-6 h-6 md:w-8 md:h-8"></i>
+            </div>
+            <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-2">Batas Gratis Tercapai</h2>
+            <p class="text-gray-500 mb-6 text-sm">Anda telah menggunakan 3 kesempatan gratis. Silakan login menggunakan akun Google untuk membuka akses tanpa batas.</p>
+            <button onclick="handleGoogleLogin()" class="w-full bg-white border border-gray-300 text-gray-700 font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-3 hover:bg-gray-50 transition shadow-sm">
+                <svg class="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                Lanjutkan dengan Google
+            </button>
+            <button onclick="closeModal()" class="mt-4 text-sm text-gray-400 hover:text-gray-600 transition">Batal</button>
+        </div>
+    </div>
+
+    <!-- Notifikasi Toast -->
+    <div id="toast" class="fixed top-20 md:top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-5 py-2.5 rounded-full shadow-2xl transition-all duration-300 opacity-0 -translate-y-10 pointer-events-none z-50 text-sm font-medium flex items-center gap-2 max-w-[90%] whitespace-nowrap overflow-hidden text-ellipsis">
+        <i data-lucide="info" class="w-4 h-4 shrink-0"></i> <span id="toast-msg">Pesan</span>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // Variabel Global
+        const apiKey = "";
+        let originalImageObj = new Image(); 
+        let customBgImageObj = new Image(); 
+        let currentBgMode = 'transparent';  
+        let zoomLevel = 100;
+        let currentTab = 'main';
+        let isCollageMode = false;
+        
+        // Status Posisi & Skala
+        let imgOffsetX = 0; let imgOffsetY = 0; let imgScale = 100; 
+        let isDraggingCanvas = false; let dragCanvasStartX = 0; let dragCanvasStartY = 0;
+        let canvasMoved = false; 
+        
+        let savedTemplates = JSON.parse(localStorage.getItem('creato_templates') || '[]');
+        let activeTemplateObj = new Image();
+
+        let canvas = document.getElementById('main-canvas');
+        let ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const canvasWrapper = document.getElementById('canvas-wrapper');
+        const emptyState = document.getElementById('empty-state');
+        const textLayer = document.getElementById('text-layer');
+        const videoContainer = document.getElementById('video-container');
+
+        // Utils Touch/Mouse Koordinat
+        function getClientPos(e) {
+            if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            return { x: e.clientX, y: e.clientY };
+        }
+
+        // ==== SISTEM UNDO & REDO (RIWAYAT) ====
+        let historyStack = [];
+        let historyIndex = -1;
+        const MAX_HISTORY = 15;
+        let isRestoring = false;
+
+        function saveState() {
+            if (isRestoring || isCollageMode) return;
+
+            const textData = Array.from(textLayer.children).map(wrapper => {
+                const content = wrapper.querySelector('.editable-text-box');
+                if (!content) return null;
+                return {
+                    text: content.innerText,
+                    left: wrapper.style.left,
+                    top: wrapper.style.top,
+                    color: content.dataset.color,
+                    size: content.dataset.size,
+                    width: content.dataset.width, // Simpan state lebar
+                    rotation: content.dataset.rotation,
+                    fontWeight: content.style.fontWeight
+                };
+            }).filter(Boolean);
+
+            const state = {
+                imageSrc: originalImageObj.getAttribute('src') || '',
+                templateSrc: activeTemplateObj.getAttribute('src') || '',
+                bgImageSrc: customBgImageObj.getAttribute('src') || '',
+                bgMode: currentBgMode,
+                bgColor: document.getElementById('bg-color-picker').value,
+                bright: document.getElementById('filter-bright').value,
+                contrast: document.getElementById('filter-contrast').value,
+                blur: document.getElementById('filter-blur').value,
+                scale: imgScale,
+                offsetX: imgOffsetX,
+                offsetY: imgOffsetY,
+                texts: textData
+            };
+
+            if (historyIndex < historyStack.length - 1) historyStack = historyStack.slice(0, historyIndex + 1);
+            historyStack.push(state);
+            if (historyStack.length > MAX_HISTORY) historyStack.shift(); else historyIndex++;
+            updateUndoRedoUI();
+        }
+
+        function updateUndoRedoUI() {
+            document.getElementById('btn-undo').disabled = historyIndex <= 0;
+            document.getElementById('btn-redo').disabled = historyIndex >= historyStack.length - 1;
+        }
+
+        function undo() { if (historyIndex > 0) { historyIndex--; restoreState(historyStack[historyIndex]); } }
+        function redo() { if (historyIndex < historyStack.length - 1) { historyIndex++; restoreState(historyStack[historyIndex]); } }
+
+        function restoreState(state) {
+            isRestoring = true;
+            let imagesToLoad = 0;
+
+            const tryApply = () => {
+                if (imagesToLoad === 0) {
+                    applyFilters(); recalibrateZoom(); isRestoring = false;
+                }
+            };
+
+            const setImage = (imgObj, src) => {
+                const currentSrc = imgObj.getAttribute('src') || '';
+                if (currentSrc !== src) { 
+                    if (!src || src === '') { imgObj.removeAttribute('src'); } 
+                    else { imagesToLoad++; imgObj.onload = () => { imagesToLoad--; tryApply(); }; imgObj.src = src; }
+                }
+            };
+
+            setImage(originalImageObj, state.imageSrc);
+            setImage(activeTemplateObj, state.templateSrc);
+            setImage(customBgImageObj, state.bgImageSrc);
+
+            currentBgMode = state.bgMode;
+            document.getElementById('bg-color-picker').value = state.bgColor;
+            document.getElementById('filter-bright').value = state.bright;
+            document.getElementById('filter-contrast').value = state.contrast;
+            document.getElementById('filter-blur').value = state.blur;
+            
+            imgScale = state.scale;
+            document.getElementById('filter-scale').value = imgScale;
+            document.getElementById('val-scale').innerText = imgScale + '%';
+            imgOffsetX = state.offsetX; imgOffsetY = state.offsetY;
+
+            textLayer.innerHTML = ''; activeTextElement = null; document.getElementById('text-format-controls').classList.add('hidden');
+            state.texts.forEach(tData => restoreTextElement(tData));
+
+            if (state.imageSrc || state.templateSrc) {
+                emptyState.style.display = 'none'; canvasWrapper.style.display = 'block';
+                if(state.templateSrc) document.getElementById('btn-clear-template').classList.remove('hidden');
+                else document.getElementById('btn-clear-template').classList.add('hidden');
+            } else {
+                emptyState.style.display = 'block'; canvasWrapper.style.display = 'none';
+                document.getElementById('btn-clear-template').classList.add('hidden');
             }
-            if(currentTab === 'bg') {
-                if(batchFiles.length === 0) showToast("Belum ada foto yang diproses!");
-                else showToast("Gunakan tombol 'Download' di masing-masing gambar hasil di layar.");
-return;
-}
-if(!canvas.style.display || canvas.style.display === 'none') {
-                showToast("Tidak ada gambar untuk diekspor!");
-                showToast("Tidak ada gambar di kanvas untuk diekspor!");
-return;
-}
+            tryApply(); updateUndoRedoUI();
+        }
+        saveState();
 
-@@ -620,7 +655,7 @@
-}
+        // ==== SISTEM NAVIGASI (TAB SWITCHING) ====
+        function switchTab(tabId) {
+            currentTab = tabId;
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-indigo-600', 'bg-indigo-50');
+                btn.classList.add('text-gray-500', 'hover:bg-gray-50');
+            });
+            document.getElementById(`nav-${tabId}`).classList.remove('text-gray-500', 'hover:bg-gray-50');
+            document.getElementById(`nav-${tabId}`).classList.add('text-indigo-600', 'bg-indigo-50');
 
-// ==== UTILITAS NOTIFIKASI ====
-        function showToast(message, duration = 2000) {
-        function showToast(message, duration = 3000) {
-const toast = document.getElementById('toast');
-toast.innerText = message;
-toast.classList.remove('opacity-0', 'translate-y-10');
+            document.getElementById('panel-main').classList.add('hidden');
+            document.getElementById('panel-collage').classList.add('hidden');
+            document.getElementById('panel-video').classList.add('hidden');
+            
+            document.getElementById(`panel-${tabId}`).classList.remove('hidden');
+            document.getElementById(`panel-${tabId}`).classList.add('flex');
+
+            canvasWrapper.style.display = 'none';
+            videoContainer.classList.add('hidden');
+            emptyState.style.display = 'block';
+
+            if (tabId === 'main') {
+                isCollageMode = false;
+                document.getElementById('empty-state-text').innerHTML = "Unggah foto atau template bingkai dari panel kiri<br>untuk mulai mendesain.";
+                if (originalImageObj.src || activeTemplateObj.src) {
+                    emptyState.style.display = 'none'; canvasWrapper.style.display = 'block'; applyFilters();
+                }
+            } else if (tabId === 'collage') {
+                document.getElementById('empty-state-text').innerHTML = "Pilih beberapa foto di panel kiri untuk<br>merangkai kolase secara otomatis.";
+                if (isCollageMode) { emptyState.style.display = 'none'; canvasWrapper.style.display = 'block'; }
+            } else if (tabId === 'video') {
+                document.getElementById('empty-state-text').innerHTML = "Unggah video dan musik latar di panel kiri.";
+                if (document.getElementById('main-video').src) { emptyState.style.display = 'none'; videoContainer.classList.remove('hidden'); }
+            }
+        }
+
+        // ==== AUTHENTIKASI ====
+        let currentUser = null; let freeTries = parseInt(localStorage.getItem('creato_tries') || '0');
+        function updateTriesUI() {
+            const nameEl = document.getElementById('user-name');
+            if (currentUser) nameEl.innerText = `${currentUser.displayName} (Pro)`;
+            else nameEl.innerText = `Guest (Sisa: ${Math.max(0, 3 - freeTries)})`;
+        }
+        updateTriesUI();
+
+        function attemptAction(actionCallback) {
+            if (!currentUser && freeTries >= 3) { document.getElementById('login-modal').classList.remove('hidden'); return; }
+            actionCallback();
+            if (!currentUser) { freeTries++; localStorage.setItem('creato_tries', freeTries); updateTriesUI(); }
+        }
+        function closeModal() { document.getElementById('login-modal').classList.add('hidden'); }
+
+        async function handleGoogleLogin() {
+            if (!window.firebaseAuth || window.firebaseAuth.app.options.apiKey === "MOCK_API_KEY") {
+                showToast("Menggunakan Simulasi Login.");
+                setTimeout(() => {
+                    currentUser = { displayName: "User Pro" };
+                    document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${currentUser.displayName}&background=4f46e5&color=fff`;
+                    closeModal(); updateTriesUI(); showToast("Berhasil Login! Akses Premium Terbuka.");
+                }, 1000); return;
+            }
+            try {
+                const provider = new window.GoogleAuthProvider();
+                const result = await window.signInWithPopup(window.firebaseAuth, provider);
+                currentUser = result.user;
+                document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${currentUser.displayName}&background=4f46e5&color=fff`;
+                closeModal(); updateTriesUI(); showToast("Berhasil Login!");
+            } catch (error) { showToast("Gagal Login: " + error.message); }
+        }
+
+        // ==== ZOOM & GESER KANVAS (Mouse & Touch) ====
+        function updateZoom(val) {
+            zoomLevel = parseInt(val);
+            document.getElementById('zoom-val').innerText = zoomLevel + '%';
+            document.getElementById('zoom-slider').value = zoomLevel;
+            canvasWrapper.style.transform = `scale(${zoomLevel / 100})`;
+        }
+        function adjustZoom(amount) {
+            let newVal = zoomLevel + amount;
+            if(newVal >= 10 && newVal <= 200) updateZoom(newVal);
+        }
+        function recalibrateZoom() {
+            if (!canvas.width || !canvas.height) return;
+            // padding responsif
+            let padding = window.innerWidth < 768 ? 20 : 60; 
+            let scaleW = (document.getElementById('workspace-area').clientWidth - padding) / canvas.width;
+            let scaleH = (document.getElementById('workspace-area').clientHeight - padding) / canvas.height;
+            updateZoom(Math.floor(Math.min(scaleW, scaleH, 1) * 100));
+        }
+
+        function onCanvasDragStart(e) {
+            if (!originalImageObj.src || isCollageMode) return;
+            isDraggingCanvas = true; canvasMoved = false;
+            const pos = getClientPos(e);
+            dragCanvasStartX = pos.x; dragCanvasStartY = pos.y;
+        }
+        canvas.addEventListener('mousedown', onCanvasDragStart);
+        canvas.addEventListener('touchstart', onCanvasDragStart, {passive: true});
+
+        function updateImageScale(val) {
+            imgScale = parseInt(val); document.getElementById('val-scale').innerText = imgScale + '%'; applyFilters();
+        }
+        function resetImagePos() {
+            imgOffsetX = 0; imgOffsetY = 0; imgScale = 100;
+            document.getElementById('filter-scale').value = 100; document.getElementById('val-scale').innerText = '100%';
+            applyFilters(); saveState(); 
+        }
+
+        // ==== GAMBAR & TEMPLATE ====
+        function handleImageUpload(e) {
+            const file = e.target.files[0]; if(!file) return;
+            let fName = file.name.split('.').slice(0, -1).join('.');
+            document.getElementById('global-filename').value = fName;
+
+            emptyState.style.display = 'none'; canvasWrapper.style.display = 'block';
+            imgOffsetX = 0; imgOffsetY = 0; imgScale = 100; document.getElementById('filter-scale').value = 100; document.getElementById('val-scale').innerText = '100%';
+            isCollageMode = false;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                originalImageObj.onload = () => { applyFilters(); recalibrateZoom(); saveState(); };
+                originalImageObj.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function renderTemplates() {
+            const grid = document.getElementById('saved-templates-grid');
+            grid.innerHTML = '';
+            savedTemplates.forEach((tempData, index) => {
+                const div = document.createElement('div');
+                div.className = 'w-full aspect-square border border-gray-200 rounded cursor-pointer hover:border-indigo-500 overflow-hidden relative group bg-white shadow-sm';
+                div.innerHTML = `
+                    <div class="transparent-pattern w-full h-full absolute inset-0 z-0 opacity-50"></div>
+                    <img src="${tempData}" class="w-full h-full object-cover relative z-10 p-1">
+                    <button onclick="deleteTemplate(event, ${index})" class="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition z-20 shadow">
+                        <i data-lucide="trash-2" class="w-3 h-3"></i>
+                    </button>
+                `;
+                div.onclick = () => applyTemplate(index); grid.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        function handleTemplateUpload(e) {
+            const file = e.target.files[0]; if(!file) return;
+            showToast("Menyimpan template...", 1000);
+            const isJpeg = file.type === 'image/jpeg'; const mimeType = isJpeg ? 'image/jpeg' : 'image/png';
+
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    const MAX_SIZE = 1080; let w = img.width, h = img.height;
+                    if (w > h && w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } 
+                    else if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; }
+                    
+                    const tempCanvas = document.createElement('canvas'); tempCanvas.width = w; tempCanvas.height = h;
+                    const tCtx = tempCanvas.getContext('2d');
+                    if (isJpeg) { tCtx.fillStyle = '#ffffff'; tCtx.fillRect(0, 0, w, h); }
+                    tCtx.drawImage(img, 0, 0, w, h);
+                    
+                    const compressedData = tempCanvas.toDataURL(mimeType, 0.9); 
+                    try {
+                        savedTemplates.push(compressedData); localStorage.setItem('creato_templates', JSON.stringify(savedTemplates));
+                        renderTemplates(); applyTemplate(savedTemplates.length - 1); showToast("Template tersimpan & otomatis diterapkan!");
+                    } catch(err) {
+                        showToast("Memori penuh! Template diterapkan sementara.");
+                        activeTemplateObj.onload = () => { applyFilters(); recalibrateZoom(); saveState(); };
+                        activeTemplateObj.src = compressedData; document.getElementById('btn-clear-template').classList.remove('hidden');
+                    }
+                }
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function deleteTemplate(e, index) { e.stopPropagation(); savedTemplates.splice(index, 1); localStorage.setItem('creato_templates', JSON.stringify(savedTemplates)); renderTemplates(); clearActiveTemplate(); }
+
+        function applyTemplate(index) {
+            activeTemplateObj.onload = () => {
+                emptyState.style.display = 'none'; canvasWrapper.style.display = 'block'; document.getElementById('btn-clear-template').classList.remove('hidden');
+                isCollageMode = false; applyFilters(); recalibrateZoom(); saveState(); 
+                if (!originalImageObj.src) showToast("Template aktif! Silakan unggah gambar utama Anda.");
+            };
+            activeTemplateObj.src = savedTemplates[index];
+        }
+
+        function clearActiveTemplate() {
+            activeTemplateObj.removeAttribute('src'); document.getElementById('btn-clear-template').classList.add('hidden');
+            if (!originalImageObj.getAttribute('src')) { canvasWrapper.style.display = 'none'; emptyState.style.display = 'block'; } 
+            else { applyFilters(); recalibrateZoom(); }
+            saveState(); 
+        }
+        renderTemplates();
+
+        // ==== BACKGROUND & FILTER ====
+        function setBgMode(mode) { currentBgMode = mode; applyFilters(); }
+        function handleBgImageUpload(e) {
+            const file = e.target.files[0]; if(!file) return;
+            const r = new FileReader(); r.onload = (ev) => { customBgImageObj.onload = () => { setBgMode('image'); saveState(); }; customBgImageObj.src = ev.target.result; };
+            r.readAsDataURL(file);
+        }
+
+        async function applyBackgroundRemoval() {
+            if(!originalImageObj.src) { showToast("Unggah gambar utama terlebih dahulu!"); return; }
+            if(!window.imglyRemoveBackground) { showToast("Sistem AI sedang memuat."); return; }
+
+            const btn = document.getElementById('btn-hapus-bg'); const icon = document.getElementById('icon-hapus-bg');
+            btn.disabled = true; btn.classList.add('opacity-70', 'cursor-wait');
+            icon.setAttribute('data-lucide', 'loader'); icon.classList.add('animate-spin'); lucide.createIcons();
+            showToast("Memotong subjek...", 4000);
+
+            try {
+                const blob = await (await fetch(originalImageObj.src)).blob();
+                const transparentBlob = await window.imglyRemoveBackground(blob, { model: 'small' });
+                originalImageObj.onload = () => { applyFilters(); showToast("Latar belakang dihapus!"); saveState(); };
+                originalImageObj.src = URL.createObjectURL(transparentBlob);
+            } catch (error) { showToast("Gagal memproses AI."); } 
+            finally {
+                btn.disabled = false; btn.classList.remove('opacity-70', 'cursor-wait');
+                icon.setAttribute('data-lucide', 'scissors'); icon.classList.remove('animate-spin'); lucide.createIcons();
+            }
+        }
+
+        function applyFilters() {
+            if (isCollageMode) return; 
+            if (!originalImageObj.getAttribute('src') && !activeTemplateObj.getAttribute('src')) return;
+
+            if (activeTemplateObj.getAttribute('src')) { canvas.width = activeTemplateObj.width; canvas.height = activeTemplateObj.height; } 
+            else if (originalImageObj.getAttribute('src')) { canvas.width = originalImageObj.width; canvas.height = originalImageObj.height; }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (currentBgMode === 'color') { ctx.fillStyle = document.getElementById('bg-color-picker').value; ctx.fillRect(0, 0, canvas.width, canvas.height); } 
+            else if (currentBgMode === 'image' && customBgImageObj.src) {
+                let r = Math.max(canvas.width / customBgImageObj.width, canvas.height / customBgImageObj.height);
+                let nw = customBgImageObj.width * r, nh = customBgImageObj.height * r;
+                ctx.drawImage(customBgImageObj, (canvas.width - nw) / 2, (canvas.height - nh) / 2, nw, nh);
+            }
+
+            const isTemplateJpeg = activeTemplateObj.getAttribute('src') && activeTemplateObj.src.startsWith('data:image/jpeg');
+
+            if (activeTemplateObj.getAttribute('src') && isTemplateJpeg) { ctx.drawImage(activeTemplateObj, 0, 0, canvas.width, canvas.height); }
+
+            if (originalImageObj.getAttribute('src')) {
+                const brightVal = document.getElementById('filter-bright')?.value || 100;
+                const contrastVal = document.getElementById('filter-contrast')?.value || 100;
+                const blurVal = document.getElementById('filter-blur')?.value || 0;
+                
+                if (document.getElementById('val-bright')) document.getElementById('val-bright').innerText = (brightVal - 100);
+                if (document.getElementById('val-contrast')) document.getElementById('val-contrast').innerText = (contrastVal - 100);
+                if (document.getElementById('val-blur')) document.getElementById('val-blur').innerText = blurVal;
+
+                ctx.filter = `brightness(${brightVal}%) contrast(${contrastVal}%) blur(${blurVal}px)`;
+                let scaleMultiplier = imgScale / 100; let drawWidth, drawHeight;
+
+                if (activeTemplateObj.getAttribute('src')) {
+                    let r = Math.max(canvas.width / originalImageObj.width, canvas.height / originalImageObj.height);
+                    drawWidth = originalImageObj.width * r * scaleMultiplier; drawHeight = originalImageObj.height * r * scaleMultiplier;
+                } else {
+                    drawWidth = originalImageObj.width * scaleMultiplier; drawHeight = originalImageObj.height * scaleMultiplier;
+                }
+
+                let centerX = (canvas.width / 2) + imgOffsetX; let centerY = (canvas.height / 2) + imgOffsetY;
+                ctx.drawImage(originalImageObj, centerX - drawWidth/2, centerY - drawHeight/2, drawWidth, drawHeight);
+                ctx.filter = 'none';
+            }
+
+            if (activeTemplateObj.getAttribute('src') && !isTemplateJpeg) { ctx.drawImage(activeTemplateObj, 0, 0, canvas.width, canvas.height); }
+        }
+
+        // ==== TEKS (Interaktif, Resolusi Lebar, Mobile Drag) ====
+        let activeTextElement = null; let isDraggingText = false; let dragTargetText = null; let textMoved = false;
+
+        function restoreTextElement(data) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'text-element-wrapper group';
+            wrapper.style.left = data.left; wrapper.style.top = data.top;
+            wrapper.style.transform = `translate(-50%, -50%) rotate(${data.rotation}deg)`;
+
+            const handle = document.createElement('div');
+            handle.className = 'text-controls opacity-0 absolute -top-8 left-1/2 transform -translate-x-1/2 bg-indigo-600 text-white px-2 py-1 rounded shadow cursor-move flex items-center gap-1 text-[11px] whitespace-nowrap transition-opacity';
+            handle.innerHTML = '<i data-lucide="move" class="w-3 h-3"></i> Geser';
+            
+            const content = document.createElement('div');
+            content.className = 'editable-text-box outline-none border-2 border-transparent hover:border-dashed hover:border-gray-400 focus:border-solid focus:border-indigo-500 p-2 text-center whitespace-pre-wrap min-w-[50px] leading-tight';
+            content.contentEditable = true; content.innerText = data.text;
+            content.dataset.color = data.color; content.dataset.size = data.size; content.dataset.rotation = data.rotation; content.dataset.width = data.width || 1500;
+            
+            content.style.fontSize = `${data.size}px`; content.style.color = data.color; content.style.fontWeight = data.fontWeight; content.style.textShadow = '2px 2px 6px rgba(0,0,0,0.6)'; 
+            if(data.width == 1500 || !data.width) { content.style.width = 'max-content'; } else { content.style.width = `${data.width}px`; }
+
+            wrapper.appendChild(handle); wrapper.appendChild(content); textLayer.appendChild(wrapper);
+
+            const activateControl = () => {
+                activeTextElement = content;
+                document.getElementById('text-format-controls').classList.remove('hidden');
+                document.getElementById('active-text-color').value = content.dataset.color;
+                document.getElementById('active-text-size').value = content.dataset.size;
+                document.getElementById('active-text-rotation').value = content.dataset.rotation;
+                document.getElementById('active-text-width').value = content.dataset.width;
+                document.getElementById('rot-val').innerText = `${content.dataset.rotation}°`;
+                document.getElementById('width-val').innerText = content.dataset.width == 1500 ? 'Auto' : `${content.dataset.width}px`;
+            };
+
+            content.addEventListener('focus', activateControl);
+            
+            const onTextDragStart = (e) => {
+                isDraggingText = true; dragTargetText = wrapper; textMoved = false;
+                const pos = getClientPos(e);
+                startX = pos.x; startY = pos.y;
+                initialLeft = parseFloat(wrapper.style.left); initialTop = parseFloat(wrapper.style.top);
+                // Hanya matikan default jika bukan touch, agar input mobile keyboard berfungsi normal
+                if(e.type === 'mousedown') e.preventDefault(); 
+            };
+
+            handle.addEventListener('mousedown', onTextDragStart);
+            handle.addEventListener('touchstart', onTextDragStart, {passive: true});
+
+            content.addEventListener('blur', () => {
+                if(content.innerText.trim() === '') {
+                    wrapper.remove();
+                    if(activeTextElement === content) { activeTextElement = null; document.getElementById('text-format-controls').classList.add('hidden'); }
+                }
+                if(!isRestoring) saveState(); 
+            });
+        }
+
+        function addTextElement(defaultText, type) {
+            if (!canvas.width) { showToast("Buat kanvas dulu!"); return; }
+
+            let baseSize = canvas.width * 0.05, fontWeight = 'normal';
+            if (type === 'title') { baseSize = canvas.width * 0.08; fontWeight = 'bold'; }
+            else if (type === 'subtitle') { baseSize = canvas.width * 0.05; fontWeight = '600'; }
+
+            const newTextData = {
+                text: defaultText, left: `${canvas.width / 2}px`, top: `${canvas.height / 2}px`,
+                color: '#ffffff', size: Math.floor(baseSize), rotation: 0, width: 1500, fontWeight: fontWeight
+            };
+            
+            restoreTextElement(newTextData);
+            lucide.createIcons();
+            
+            const newlyAdded = textLayer.lastChild.querySelector('.editable-text-box');
+            newlyAdded.focus();
+            saveState(); 
+        }
+
+        // Global Move & End Event (Mouse & Touch)
+        function onGlobalMove(e) {
+            const scale = zoomLevel / 100;
+            const pos = getClientPos(e);
+
+            if (isDraggingText && dragTargetText) {
+                dragTargetText.style.left = `${initialLeft + (pos.x - startX) / scale}px`;
+                dragTargetText.style.top = `${initialTop + (pos.y - startY) / scale}px`;
+                textMoved = true;
+                if(e.type === 'touchmove') e.preventDefault(); // Mencegah scrolling layer background di HP saat drag teks
+            }
+            if (isDraggingCanvas) {
+                imgOffsetX += (pos.x - dragCanvasStartX) / scale;
+                imgOffsetY += (pos.y - dragCanvasStartY) / scale;
+                dragCanvasStartX = pos.x; dragCanvasStartY = pos.y;
+                canvasMoved = true;
+                applyFilters();
+                if(e.type === 'touchmove') e.preventDefault(); // Mencegah scrolling layar saat geser gambar
+            }
+        }
+
+        function onGlobalEnd() {
+            isDraggingText = false; dragTargetText = null; isDraggingCanvas = false; 
+            if ((textMoved || canvasMoved) && !isRestoring) { saveState(); textMoved = false; canvasMoved = false; }
+        }
+
+        window.addEventListener('mousemove', onGlobalMove);
+        window.addEventListener('touchmove', onGlobalMove, {passive: false});
+        window.addEventListener('mouseup', onGlobalEnd);
+        window.addEventListener('touchend', onGlobalEnd);
+
+        function updateActiveTextFormat() {
+            if (!activeTextElement) return;
+            const c = document.getElementById('active-text-color').value, 
+                  s = document.getElementById('active-text-size').value, 
+                  r = document.getElementById('active-text-rotation').value,
+                  w = document.getElementById('active-text-width').value;
+            
+            activeTextElement.dataset.color = c; activeTextElement.style.color = c;
+            activeTextElement.dataset.size = s; activeTextElement.style.fontSize = `${s}px`;
+            
+            activeTextElement.dataset.rotation = r; document.getElementById('rot-val').innerText = `${r}°`;
+            activeTextElement.parentElement.style.transform = `translate(-50%, -50%) rotate(${r}deg)`;
+
+            activeTextElement.dataset.width = w;
+            if (w == 1500) {
+                activeTextElement.style.width = 'max-content';
+                document.getElementById('width-val').innerText = 'Auto';
+            } else {
+                activeTextElement.style.width = `${w}px`;
+                document.getElementById('width-val').innerText = `${w}px`;
+            }
+        }
+        function deleteActiveText() {
+            if (!activeTextElement) return;
+            activeTextElement.parentElement.remove(); activeTextElement = null; document.getElementById('text-format-controls').classList.add('hidden');
+            saveState(); 
+        }
+
+        // ==== AI ====
+        async function fetchWithRetry(url, options, maxRetries=3) {
+            let delays = [1000, 2000, 4000];
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const r = await fetch(url, options); if (!r.ok) throw new Error(); return await r.json();
+                } catch (e) { if (i === maxRetries - 1) throw e; await new Promise(res => setTimeout(res, delays[i])); }
+            }
+        }
+        async function generateAICaption() {
+            if (!canvas.width) { showToast("Upload foto dulu!"); return; }
+            const btn = document.getElementById('btn-ai-caption'); const ori = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i>'; btn.disabled = true; lucide.createIcons();
+            try {
+                const b64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; 
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                const res = await fetchWithRetry(url, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({contents: [{role: "user", parts: [{ text: "Satu kalimat caption pendek estetik relevan dengan gambar ini (maks 6 kata) bahasa Indonesia. Tanpa tanda kutip." }, { inlineData: { mimeType: "image/jpeg", data: b64 } }]}]})
+                });
+                const txt = res.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+                if (txt) { 
+                    addTextElement(txt.replace(/^["']|["']$/g, '').trim(), 'subtitle'); 
+                    showToast("AI berhasil!"); 
+                } 
+                else throw new Error();
+            } catch (e) { showToast("Gagal memanggil AI."); } 
+            finally { btn.innerHTML = ori; btn.disabled = false; lucide.createIcons(); }
+        }
+
+        // ==== KOLASE & VIDEO ====
+        function createCollage() {
+            const files = document.getElementById('collage-upload').files;
+            if (files.length === 0) { showToast("Pilih foto dulu!"); return; }
+            
+            isCollageMode = true;
+            emptyState.style.display = 'none'; canvasWrapper.style.display = 'block';
+            canvas.width = 1000; canvas.height = 1000;
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            let loaded = 0, imgs = [];
+            for (let i = 0; i < Math.min(files.length, 4); i++) {
+                let img = new Image();
+                img.onload = () => {
+                    loaded++; imgs.push(img);
+                    if (loaded === Math.min(files.length, 4)) {
+                        let cols = imgs.length > 2 ? 2 : imgs.length;
+                        let rows = Math.ceil(imgs.length / 2);
+                        let w = canvas.width / cols, h = canvas.height / rows;
+                        imgs.forEach((im, idx) => {
+                            let x = (idx % cols) * w, y = Math.floor(idx / cols) * h;
+                            let r = Math.max(w / im.width, h / im.height);
+                            let nw = im.width * r, nh = im.height * r;
+                            ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+                            ctx.drawImage(im, x + (w - nw) / 2, y + (h - nh) / 2, nw, nh);
+                            ctx.restore();
+                            ctx.strokeStyle = 'white'; ctx.lineWidth = 10; ctx.strokeRect(x, y, w, h);
+                        });
+                        recalibrateZoom(); showToast("Kolase berhasil!");
+                    }
+                };
+                img.src = URL.createObjectURL(files[i]);
+            }
+        }
+
+        document.getElementById('vid-upload').addEventListener('change', e => { if(e.target.files[0]) { emptyState.style.display = 'none'; videoContainer.classList.remove('hidden'); document.getElementById('main-video').src = URL.createObjectURL(e.target.files[0]); }});
+        document.getElementById('aud-upload').addEventListener('change', e => { if(e.target.files[0]) document.getElementById('main-audio').src = URL.createObjectURL(e.target.files[0]); });
+
+        function startVideoRecord() {
+            const vel = document.getElementById('main-video'), ael = document.getElementById('main-audio');
+            if(!vel.src) { showToast("Upload video dulu!"); return; }
+            const btn = document.getElementById('record-btn'); btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i>'; lucide.createIcons();
+            
+            vel.muted = true; 
+            const actx = new (window.AudioContext || window.webkitAudioContext)(), dest = actx.createMediaStreamDestination();
+            if(ael.src) { const src = actx.createMediaElementSource(ael); src.connect(dest); src.connect(actx.destination); }
+            
+            let chunks = [];
+            const rec = new MediaRecorder(new MediaStream([...vel.captureStream().getVideoTracks(), ...dest.stream.getAudioTracks()]), { mimeType: 'video/webm' });
+            rec.ondataavailable = e => { if(e.data.size > 0) chunks.push(e.data); };
+            rec.onstop = () => {
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(chunks, { type: 'video/webm' })); a.download = 'video_edit.webm'; a.click();
+                btn.innerHTML = '<i data-lucide="film" class="w-5 h-5"></i> Gabungkan & Unduh'; lucide.createIcons(); showToast("Video Diunduh!");
+            };
+            vel.play(); if(ael.src) ael.play(); rec.start();
+            vel.onended = () => { rec.stop(); if(ael.src) ael.pause(); };
+        }
+
+        // ==== DOWNLOAD & AUTO-WRAP TEXT RENDERING ====
+        function downloadResult() {
+            if(currentTab === 'video') { showToast("Gunakan tombol 'Gabungkan & Unduh' untuk video."); return; }
+            if(!canvasWrapper.style.display || canvasWrapper.style.display === 'none') { showToast("Tidak ada desain yang bisa diunduh!"); return; }
+
+            if(!isCollageMode) applyFilters(); 
+            
+            Array.from(textLayer.children).forEach(wrapper => {
+                const c = wrapper.querySelector('.editable-text-box'); if(!c || c.innerText.trim() === '') return;
+                
+                const fs = parseInt(c.dataset.size);
+                const color = c.dataset.color;
+                const fw = c.style.fontWeight;
+                const rot = parseFloat(c.dataset.rotation) || 0;
+                
+                // Cek apakah mode lebar custom dihidupkan
+                const isAutoWidth = (!c.dataset.width || c.dataset.width == 1500);
+                const maxWidthNum = isAutoWidth ? null : parseFloat(c.dataset.width);
+
+                ctx.save(); 
+                ctx.translate(parseFloat(wrapper.style.left), parseFloat(wrapper.style.top)); 
+                ctx.rotate(rot * Math.PI / 180);
+                
+                ctx.font = `${fw} ${fs}px 'Inter', sans-serif`; 
+                ctx.fillStyle = color; 
+                ctx.textAlign = "center"; 
+                ctx.textBaseline = "middle";
+                
+                ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = Math.max(5, fs / 6); ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+
+                // Logika Memecah Baris Teks (Auto-Wrap sesuai Lebar di Unduhan)
+                let rawLines = c.innerText.split('\n');
+                let linesToDraw = [];
+
+                if (maxWidthNum) {
+                    rawLines.forEach(rawLine => {
+                        const words = rawLine.split(' ');
+                        let line = '';
+                        for(let n = 0; n < words.length; n++) {
+                            let testLine = line + words[n] + ' ';
+                            let metrics = ctx.measureText(testLine);
+                            if (metrics.width > maxWidthNum && n > 0) {
+                                linesToDraw.push(line.trim());
+                                line = words[n] + ' ';
+                            } else {
+                                line = testLine;
+                            }
+                        }
+                        linesToDraw.push(line.trim());
+                    });
+                } else {
+                    linesToDraw = rawLines;
+                }
+
+                const lineHeight = fs * 1.2;
+                const startY = -((linesToDraw.length - 1) * lineHeight) / 2;
+                linesToDraw.forEach((l, i) => ctx.fillText(l, 0, startY + (i * lineHeight)));
+                ctx.restore(); 
+            });
+
+            const ext = (currentBgMode === 'transparent' && !isCollageMode) ? 'png' : 'jpg';
+            const a = document.createElement('a'); a.download = `${document.getElementById('global-filename').value.trim() || 'Desain_Creato'}.${ext}`;
+            a.href = canvas.toDataURL(ext==='png'?'image/png':'image/jpeg', ext==='png'?undefined:0.95); a.click();
+            showToast(`Desain diunduh sebagai .${ext}`);
+        }
+
+        function showToast(msg, dur=3000) {
+            const t = document.getElementById('toast'); document.getElementById('toast-msg').innerText = msg;
+            t.classList.remove('opacity-0', '-translate-y-10'); setTimeout(() => t.classList.add('opacity-0', '-translate-y-10'), dur);
+        }
+    </script>
+</body>
+</html>
