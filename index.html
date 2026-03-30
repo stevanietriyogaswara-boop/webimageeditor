@@ -433,8 +433,13 @@
                     const img = new Image();
                     await new Promise(r => { img.onload = r; img.src = blobUrl; });
 
+                    // Konfigurasi AI untuk memprioritaskan kecepatan
+                    const aiConfig = {
+                        model: 'small' // Menggunakan model AI yang lebih ringan (lebih cepat & hemat RAM)
+                    };
+
                     // Panggil AI dari Imgly
-                    const imageWithoutBgBlob = await window.imglyRemoveBackground(file);
+                    const imageWithoutBgBlob = await window.imglyRemoveBackground(file, aiConfig);
                     const imageWithoutBgUrl = URL.createObjectURL(imageWithoutBgBlob);
                     
                     const processedImg = new Image();
