@@ -1,1 +1,634 @@
-<h1>Halo Dunia! Alat Editor Gambar Saya Sedang Dibangun</h1>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creato - Editor Gambar & Video Online</title>
+    <!-- Tailwind CSS untuk Desain -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Imgly Background Removal (AI Client-Side) via esm.sh -->
+    <script type="module">
+        import imglyRemoveBackground from 'https://esm.sh/@imgly/background-removal@1.4.5';
+        window.imglyRemoveBackground = imglyRemoveBackground;
+    </script>
+    <!-- Firebase SDK (Untuk Google Login) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+        // PERHATIAN: Ganti konfigurasi ini dengan milik Anda dari Firebase Console nanti
+        const firebaseConfig = {
+            apiKey: "MOCK_API_KEY",
+            authDomain: "creato-app.firebaseapp.com",
+            projectId: "creato-app",
+        };
+
+        // Inisialisasi Firebase (Akan error jika MOCK_API_KEY tidak diganti, tapi UI mock login sudah disiapkan di bawah)
+        let auth;
+        try {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+        } catch(e) {
+            console.log("Firebase belum dikonfigurasi. Menggunakan mode lokal.");
+        }
+
+        window.firebaseAuth = auth;
+        window.signInWithPopup = signInWithPopup;
+        window.GoogleAuthProvider = GoogleAuthProvider;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.signOut = signOut;
+    </script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .canvas-container { background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px; }
+        /* Sembunyikan scrollbar untuk area kerja */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white h-screen flex flex-col overflow-hidden">
+
+    <!-- Navbar -->
+    <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center z-10">
+        <div class="flex items-center gap-2">
+            <i data-lucide="aperture" class="text-indigo-500 w-8 h-8"></i>
+            <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-500">Creato Studio</h1>
+        </div>
+        <div class="flex items-center gap-4">
+            <div id="freemium-status" class="bg-gray-700 px-4 py-1.5 rounded-full text-sm font-medium flex items-center gap-2">
+                <span id="tries-text">Sisa Gratis: 3/3</span>
+            </div>
+            <button id="auth-btn" onclick="handleAuthClick()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg font-medium transition flex items-center gap-2">
+                <i data-lucide="log-in" class="w-4 h-4"></i> Login Google
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="flex flex-1 overflow-hidden">
+        
+        <!-- Sidebar Menu -->
+        <aside class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
+            <div class="p-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Editor Gambar</div>
+            <button onclick="switchTab('effects')" class="tab-btn w-full text-left px-6 py-3 hover:bg-gray-700 flex items-center gap-3 bg-gray-700 border-l-4 border-indigo-500" id="tab-effects">
+                <i data-lucide="wand-2" class="w-5 h-5 text-indigo-400"></i> Efek & Filter
+            </button>
+            <button onclick="switchTab('bg')" class="tab-btn w-full text-left px-6 py-3 hover:bg-gray-700 flex items-center gap-3 border-l-4 border-transparent" id="tab-bg">
+                <i data-lucide="image" class="w-5 h-5 text-green-400"></i> Hapus/Ganti BG (Chroma)
+            </button>
+            <button onclick="switchTab('collage')" class="tab-btn w-full text-left px-6 py-3 hover:bg-gray-700 flex items-center gap-3 border-l-4 border-transparent" id="tab-collage">
+                <i data-lucide="layout-grid" class="w-5 h-5 text-orange-400"></i> Edit Collapse (Kolase)
+            </button>
+
+            <div class="p-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-4 border-t border-gray-700">Editor Video</div>
+            <button onclick="switchTab('video')" class="tab-btn w-full text-left px-6 py-3 hover:bg-gray-700 flex items-center gap-3 border-l-4 border-transparent" id="tab-video">
+                <i data-lucide="film" class="w-5 h-5 text-red-400"></i> Potong & Gabung Audio
+            </button>
+        </aside>
+
+        <!-- Workspace Area -->
+        <main class="flex-1 bg-gray-900 relative flex flex-col">
+            
+            <!-- Tool Panels (Dynamic based on selection) -->
+            <div id="panel-effects" class="tool-panel p-4 bg-gray-800 border-b border-gray-700 flex gap-4 items-end">
+                <div class="flex-1">
+                    <label class="block text-sm mb-1 text-gray-400">Upload Foto Utama</label>
+                    <input type="file" id="img-upload" accept="image/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer">
+                </div>
+                <div class="flex-1">
+                    <label class="block text-sm mb-1 text-gray-400">Kecerahan</label>
+                    <input type="range" id="filter-bright" min="0" max="200" value="100" class="w-full" oninput="applyFilters()">
+                </div>
+                <div class="flex-1">
+                    <label class="block text-sm mb-1 text-gray-400">Kontras</label>
+                    <input type="range" id="filter-contrast" min="0" max="200" value="100" class="w-full" oninput="applyFilters()">
+                </div>
+                <div class="flex-1">
+                    <label class="block text-sm mb-1 text-gray-400">Blur</label>
+                    <input type="range" id="filter-blur" min="0" max="20" value="0" class="w-full" oninput="applyFilters()">
+                </div>
+            </div>
+
+            <div id="panel-bg" class="tool-panel hidden p-4 bg-gray-800 border-b border-gray-700 flex flex-wrap gap-4 items-end">
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-sm mb-1 text-gray-400">Upload Foto Target</label>
+                    <input type="file" id="bg-fg-upload" accept="image/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-600 file:text-white cursor-pointer">
+                </div>
+                <div class="flex-1 min-w-[100px]">
+                    <label class="block text-sm mb-1 text-gray-400">Warna Latar</label>
+                    <input type="color" id="bg-color-picker" value="#00ff00" class="block w-full h-10 p-1 rounded cursor-pointer bg-gray-700 border-gray-600">
+                </div>
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-sm mb-1 text-gray-400">Atau Upload Gambar Baru</label>
+                    <input type="file" id="bg-bg-upload" accept="image/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-600 file:text-white cursor-pointer">
+                </div>
+                <button id="btn-remove-bg" onclick="attemptAction(removeBackgroundAI)" class="bg-green-600 hover:bg-green-700 px-6 py-2 rounded-lg font-medium h-10 w-full md:w-auto mt-2 md:mt-0 flex items-center justify-center gap-2">
+                    <i data-lucide="sparkles" class="w-4 h-4"></i> Hapus BG (AI)
+                </button>
+            </div>
+
+            <div id="panel-collage" class="tool-panel hidden p-4 bg-gray-800 border-b border-gray-700 flex gap-4 items-end">
+                 <div class="flex-1">
+                    <label class="block text-sm mb-1 text-gray-400">Pilih Beberapa Foto (Max 4)</label>
+                    <input type="file" id="collage-upload" accept="image/*" multiple class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-600 file:text-white cursor-pointer">
+                </div>
+                <button onclick="attemptAction(createCollage)" class="bg-orange-600 hover:bg-orange-700 px-6 py-2 rounded-lg font-medium h-10">Buat Kolase</button>
+            </div>
+
+            <div id="panel-video" class="tool-panel hidden p-4 bg-gray-800 border-b border-gray-700 flex gap-4 items-end">
+                <div class="flex-1">
+                    <label class="block text-sm mb-1 text-gray-400">Upload Video Utama</label>
+                    <input type="file" id="vid-upload" accept="video/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-red-600 file:text-white cursor-pointer">
+                </div>
+                <div class="flex-1">
+                    <label class="block text-sm mb-1 text-gray-400">Upload Musik Latar (Backsound)</label>
+                    <input type="file" id="aud-upload" accept="audio/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-600 file:text-white cursor-pointer">
+                </div>
+                <button onclick="attemptAction(startVideoRecord)" id="record-btn" class="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-lg font-medium h-10 flex gap-2 items-center">
+                    <i data-lucide="play" class="w-4 h-4"></i> Proses & Gabungkan
+                </button>
+            </div>
+
+            <!-- Canvas / Preview Area -->
+            <div class="flex-1 p-6 overflow-auto canvas-container flex items-center justify-center relative">
+                <!-- Image Canvas -->
+                <canvas id="main-canvas" class="max-w-full max-h-full shadow-2xl rounded" style="display:none;"></canvas>
+                
+                <!-- Video Preview -->
+                <div id="video-container" class="hidden relative w-full h-full flex items-center justify-center">
+                    <video id="main-video" class="max-w-full max-h-full rounded shadow-2xl" controls></video>
+                    <audio id="main-audio" class="hidden"></audio>
+                </div>
+
+                <div id="empty-state" class="text-gray-500 text-center flex flex-col items-center">
+                    <i data-lucide="image-plus" class="w-16 h-16 mb-4 opacity-50"></i>
+                    <p class="text-lg">Silakan upload file untuk memulai</p>
+                </div>
+            </div>
+
+            <!-- Export Button (Bottom Right) -->
+            <div class="absolute bottom-6 right-6">
+                <button onclick="attemptAction(downloadResult)" class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8 py-3 rounded-full font-bold shadow-lg flex items-center gap-2 transform hover:scale-105 transition">
+                    <i data-lucide="download" class="w-5 h-5"></i> Ekspor / Download
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Login Freemium -->
+    <div id="login-modal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center z-50">
+        <div class="bg-gray-800 p-8 rounded-2xl max-w-md w-full text-center border border-gray-700 shadow-2xl">
+            <div class="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="lock" class="w-8 h-8 text-indigo-400"></i>
+            </div>
+            <h2 class="text-2xl font-bold mb-2">Batas Gratis Tercapai</h2>
+            <p class="text-gray-400 mb-6">Anda telah menggunakan 3 kesempatan gratis. Silakan login menggunakan akun Google untuk melanjutkan akses tanpa batas (Premium).</p>
+            <button onclick="handleGoogleLogin()" class="w-full bg-white text-gray-900 font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-3 hover:bg-gray-100 transition">
+                <svg class="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                Lanjutkan dengan Google
+            </button>
+            <button onclick="closeModal()" class="mt-4 text-sm text-gray-500 hover:text-white">Batal</button>
+        </div>
+    </div>
+
+    <!-- Notifikasi -->
+    <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-xl transition-all duration-300 opacity-0 translate-y-10 pointer-events-none z-50">
+        Pesan Notifikasi
+    </div>
+
+    <script>
+        // Inisialisasi Ikon
+        lucide.createIcons();
+
+        // Variabel State
+        let currentTab = 'effects';
+        let originalImage = new Image();
+        let bgImageObj = new Image();
+        let bgMode = 'color'; // Menyimpan state pilihan latar: 'color' atau 'image'
+        let canvas = document.getElementById('main-canvas');
+        let ctx = canvas.getContext('2d', { willReadFrequently: true });
+        let currentUser = null;
+        let freeTries = parseInt(localStorage.getItem('creato_tries') || '0');
+
+        // Elemen DOM
+        const emptyState = document.getElementById('empty-state');
+        const videoContainer = document.getElementById('video-container');
+        const videoEl = document.getElementById('main-video');
+        const audioEl = document.getElementById('main-audio');
+
+        // ==== SISTEM FREEMIUM & AUTH ====
+        function updateTriesUI() {
+            const statusEl = document.getElementById('tries-text');
+            if (currentUser) {
+                statusEl.innerText = "Akun Premium (Unlimited)";
+                statusEl.parentElement.classList.replace('bg-gray-700', 'bg-indigo-600');
+            } else {
+                let sisa = Math.max(0, 3 - freeTries);
+                statusEl.innerText = `Sisa Gratis: ${sisa}/3`;
+                if(sisa === 0) statusEl.parentElement.classList.replace('bg-gray-700', 'bg-red-900');
+            }
+        }
+        updateTriesUI();
+
+        function attemptAction(actionCallback) {
+            if (!currentUser && freeTries >= 3) {
+                document.getElementById('login-modal').classList.remove('hidden');
+                return;
+            }
+            // Eksekusi aksi (Export, Edit, dll)
+            actionCallback();
+            
+            // Catat penggunaan jika belum login
+            if (!currentUser) {
+                freeTries++;
+                localStorage.setItem('creato_tries', freeTries);
+                updateTriesUI();
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('login-modal').classList.add('hidden');
+        }
+
+        function handleAuthClick() {
+            if (currentUser) {
+                // Logout (Simulasi atau Real Firebase)
+                if(window.firebaseAuth) { window.signOut(window.firebaseAuth); }
+                currentUser = null;
+                document.getElementById('auth-btn').innerHTML = '<i data-lucide="log-in" class="w-4 h-4"></i> Login Google';
+                lucide.createIcons();
+                showToast("Berhasil Logout");
+            } else {
+                document.getElementById('login-modal').classList.remove('hidden');
+            }
+            updateTriesUI();
+        }
+
+        async function handleGoogleLogin() {
+            // Jika Firebase belum diset di GitHub pages, gunakan Mock Login agar UI tetap berjalan
+            if (!window.firebaseAuth || window.firebaseAuth.app.options.apiKey === "MOCK_API_KEY") {
+                console.log("Menggunakan Mock Login (Ganti konfigurasi Firebase di HTML untuk real login)");
+                setTimeout(() => {
+                    currentUser = { displayName: "Pengguna Mock" };
+                    processLoginSuccess();
+                }, 1000);
+                return;
+            }
+
+            // Real Firebase Login
+            try {
+                const provider = new window.GoogleAuthProvider();
+                const result = await window.signInWithPopup(window.firebaseAuth, provider);
+                currentUser = result.user;
+                processLoginSuccess();
+            } catch (error) {
+                showToast("Gagal Login: " + error.message);
+            }
+        }
+
+        function processLoginSuccess() {
+            closeModal();
+            updateTriesUI();
+            document.getElementById('auth-btn').innerHTML = `<img src="https://ui-avatars.com/api/?name=${currentUser.displayName}&background=6366f1&color=fff" class="w-6 h-6 rounded-full"> Keluar`;
+            showToast("Berhasil Login! Akses Premium Terbuka.");
+        }
+
+
+        // ==== NAVIGASI TAB ====
+        function switchTab(tabId) {
+            currentTab = tabId;
+            // Sembunyikan semua panel
+            document.querySelectorAll('.tool-panel').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => {
+                el.classList.remove('border-l-4', 'border-indigo-500', 'border-green-500', 'border-orange-500', 'border-red-500', 'bg-gray-700');
+                el.classList.add('border-transparent');
+            });
+
+            // Tampilkan panel aktif
+            document.getElementById(`panel-${tabId}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-${tabId}`);
+            activeBtn.classList.add('bg-gray-700', 'border-l-4');
+            
+            // Set warna border aktif
+            if(tabId === 'effects') activeBtn.classList.add('border-indigo-500');
+            if(tabId === 'bg') activeBtn.classList.add('border-green-500');
+            if(tabId === 'collage') activeBtn.classList.add('border-orange-500');
+            if(tabId === 'video') activeBtn.classList.add('border-red-500');
+
+            // Toggle Canvas vs Video view
+            if(tabId === 'video') {
+                canvas.style.display = 'none';
+                videoContainer.classList.remove('hidden');
+                emptyState.classList.add('hidden');
+            } else {
+                videoContainer.classList.add('hidden');
+                if(originalImage.src || tabId === 'collage') {
+                    canvas.style.display = 'block';
+                    emptyState.classList.add('hidden');
+                } else {
+                    canvas.style.display = 'none';
+                    emptyState.classList.remove('hidden');
+                }
+            }
+        }
+
+
+        // ==== FITUR: EFEK GAMBAR ====
+        document.getElementById('img-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                originalImage.onload = () => {
+                    canvas.width = originalImage.width;
+                    canvas.height = originalImage.height;
+                    canvas.style.display = 'block';
+                    emptyState.classList.add('hidden');
+                    applyFilters();
+                };
+                originalImage.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function applyFilters() {
+            if (!originalImage.src) return;
+            const brightness = document.getElementById('filter-bright').value;
+            const contrast = document.getElementById('filter-contrast').value;
+            const blur = document.getElementById('filter-blur').value;
+
+            ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) blur(${blur}px)`;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(originalImage, 0, 0);
+        }
+
+
+        // ==== FITUR: GANTI BACKGROUND (CHROMA KEY / GREEN-WHITE SCREEN) ====
+        document.getElementById('bg-fg-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => { originalImage.src = ev.target.result; };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        document.getElementById('bg-color-picker').addEventListener('input', function(e) {
+            bgMode = 'color'; // Pindah mode ke warna
+        });
+
+        document.getElementById('bg-bg-upload').addEventListener('change', function(e) {
+            bgMode = 'image'; // Pindah mode ke gambar
+            const file = e.target.files[0];
+            if(file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => { bgImageObj.src = ev.target.result; };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        async function removeBackgroundAI() {
+            if(!originalImage.src) { showToast("Upload foto target dulu!"); return; }
+            
+            if (!window.imglyRemoveBackground) {
+                showToast("Sistem AI sedang memuat, silakan tunggu beberapa detik dan coba lagi.");
+                return;
+            }
+
+            const btn = document.getElementById('btn-remove-bg');
+            btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Memproses AI...';
+            btn.disabled = true;
+            
+            // AI butuh waktu mengunduh modelnya di percobaan pertama, beri tahu user
+            showToast("Sedang memproses AI... (Proses pertama butuh internet lancar)", 4000);
+
+            try {
+                canvas.width = originalImage.width;
+                canvas.height = originalImage.height;
+                
+                // 1. Ubah gambar asli menjadi Blob agar bisa dibaca oleh AI
+                const res = await fetch(originalImage.src);
+                const blob = await res.blob();
+                
+                // 2. Eksekusi AI tanpa meng-override publicPath agar mengambil model dari CDN bawaannya (static.imgly.com)
+                const imageWithoutBgBlob = await window.imglyRemoveBackground(blob);
+                const imageWithoutBgUrl = URL.createObjectURL(imageWithoutBgBlob);
+
+                // 3. Gabungkan hasil potongan AI dengan warna/gambar latar belakang pilihan user
+                let processedImg = new Image();
+                processedImg.onload = () => {
+                    // Gambar latar belakang (Warna / Gambar upload)
+                    if (bgMode === 'color') {
+                        ctx.fillStyle = document.getElementById('bg-color-picker').value;
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    } else if (bgMode === 'image' && bgImageObj.src) {
+                        ctx.drawImage(bgImageObj, 0, 0, canvas.width, canvas.height);
+                    } else {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    }
+
+                    // Gambar hasil krop wajah/badan di atas layar
+                    ctx.drawImage(processedImg, 0, 0, canvas.width, canvas.height);
+                    
+                    canvas.style.display = 'block';
+                    emptyState.classList.add('hidden');
+                    
+                    // Kembalikan tombol seperti semula
+                    btn.innerHTML = '<i data-lucide="sparkles" class="w-4 h-4"></i> Hapus BG (AI)';
+                    btn.disabled = false;
+                    lucide.createIcons();
+                    showToast("Selesai! Subjek berhasil dipotong dengan AI.");
+                };
+                processedImg.src = imageWithoutBgUrl;
+
+            } catch (error) {
+                console.error(error);
+                showToast("Gagal! Pastikan perangkat Anda terkoneksi internet.");
+                btn.innerHTML = '<i data-lucide="sparkles" class="w-4 h-4"></i> Hapus BG (AI)';
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        }
+
+        // ==== FITUR: KOLASE (COLLAPSE PHOTO) ====
+        function createCollage() {
+            const files = document.getElementById('collage-upload').files;
+            if (files.length === 0) { showToast("Upload foto dulu!"); return; }
+            
+            canvas.style.display = 'block';
+            emptyState.classList.add('hidden');
+            
+            // Set ukuran kanvas persegi standar
+            canvas.width = 1000;
+            canvas.height = 1000;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            let loadedImages = 0;
+            let imgElements = [];
+
+            // Muat semua gambar
+            for (let i = 0; i < files.length && i < 4; i++) {
+                let img = new Image();
+                img.onload = () => {
+                    loadedImages++;
+                    imgElements.push(img);
+                    if (loadedImages === Math.min(files.length, 4)) {
+                        drawGrid(imgElements);
+                    }
+                };
+                img.src = URL.createObjectURL(files[i]);
+            }
+        }
+
+        function drawGrid(images) {
+            let cols = images.length > 2 ? 2 : images.length;
+            let rows = Math.ceil(images.length / 2);
+            let cellW = canvas.width / cols;
+            let cellH = canvas.height / rows;
+
+            images.forEach((img, index) => {
+                let col = index % cols;
+                let row = Math.floor(index / cols);
+                let x = col * cellW;
+                let y = row * cellH;
+                
+                // Draw image with object-fit: cover simulation
+                let r = Math.min(cellW / img.width, cellH / img.height);
+                let nw = img.width * r;
+                let nh = img.height * r;
+                let offsetX = x + (cellW - nw) / 2;
+                let offsetY = y + (cellH - nh) / 2;
+                
+                // Set kliping untuk grid
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(x, y, cellW, cellH);
+                ctx.clip();
+                ctx.drawImage(img, offsetX, offsetY, nw, nh);
+                ctx.restore();
+                
+                // Garis putih
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 10;
+                ctx.strokeRect(x, y, cellW, cellH);
+            });
+            showToast("Kolase berhasil dibuat!");
+        }
+
+
+        // ==== FITUR: VIDEO MUXING (GABUNG VIDEO & AUDIO VIA BROWSER) ====
+        document.getElementById('vid-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(file) videoEl.src = URL.createObjectURL(file);
+        });
+        document.getElementById('aud-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(file) audioEl.src = URL.createObjectURL(file);
+        });
+
+        let mediaRecorder;
+        let recordedChunks = [];
+
+        function startVideoRecord() {
+            if(!videoEl.src) { showToast("Upload video dulu!"); return; }
+            
+            showToast("Memulai Proses Gabung Video & Audio...", 3000);
+            const btn = document.getElementById('record-btn');
+            btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Memproses...';
+            
+            // Mute video asli agar suara dari elemen <audio> yang masuk
+            videoEl.muted = true; 
+            
+            // Tangkap stream dari elemen video (visual)
+            const videoStream = videoEl.captureStream();
+            
+            // Buat Audio Context untuk menggabungkan suara
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const dest = audioCtx.createMediaStreamDestination();
+            
+            // Sambungkan audio file ke stream
+            if(audioEl.src) {
+                const sourceNode = audioCtx.createMediaElementSource(audioEl);
+                sourceNode.connect(dest);
+                sourceNode.connect(audioCtx.destination); // Play di speaker
+            }
+            
+            // Gabungkan track video dan track audio
+            const combinedStream = new MediaStream([
+                ...videoStream.getVideoTracks(),
+                ...dest.stream.getAudioTracks()
+            ]);
+
+            mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+            
+            mediaRecorder.ondataavailable = (e) => {
+                if(e.data.size > 0) recordedChunks.push(e.data);
+            };
+            
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                
+                // Otomatis Download
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'creato_video_edit.webm';
+                document.body.appendChild(a);
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                btn.innerHTML = '<i data-lucide="play" class="w-4 h-4"></i> Proses & Gabungkan';
+                lucide.createIcons();
+                showToast("Video Berhasil Digabung & Diunduh!");
+                recordedChunks = [];
+            };
+
+            // Mainkan video dan audio serentak, lalu mulai rekam
+            videoEl.play();
+            if(audioEl.src) audioEl.play();
+            mediaRecorder.start();
+
+            // Berhenti rekam saat video selesai
+            videoEl.onended = () => {
+                mediaRecorder.stop();
+                if(audioEl.src) audioEl.pause();
+            };
+        }
+
+
+        // ==== EKSPOR GAMBAR ====
+        function downloadResult() {
+            if(currentTab === 'video') {
+                showToast("Gunakan tombol 'Proses & Gabungkan' di panel video.");
+                return;
+            }
+            if(!canvas.style.display || canvas.style.display === 'none') {
+                showToast("Tidak ada gambar untuk diekspor!");
+                return;
+            }
+
+            const dataURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'creato_export.png';
+            link.href = dataURL;
+            link.click();
+            showToast("Gambar berhasil diunduh!");
+        }
+
+        // ==== UTILITAS NOTIFIKASI ====
+        function showToast(message, duration = 2000) {
+            const toast = document.getElementById('toast');
+            toast.innerText = message;
+            toast.classList.remove('opacity-0', 'translate-y-10');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-10');
+            }, duration);
+        }
+
+    </script>
+</body>
+</html>
